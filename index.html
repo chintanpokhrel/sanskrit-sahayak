@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ne">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>संस्कृत सहायक</title>
+  <meta name="description" content="लघुसिद्धान्तकौमुदी अनुसार संस्कृत व्याकरण — सूत्र, सन्धि, प्रत्याहार, अभ्यास र प्रगति।">
+  <meta name="theme-color" content="#8a2b2b">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;600;700&family=Tiro+Devanagari+Sanskrit&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main id="view" aria-live="polite"></main>
+
+  <nav class="tabbar" aria-label="मुख्य">
+    <a href="#/" data-tab="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>गृह</span></a>
+    <a href="#/lessons" data-tab="lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21V5m4 2h7"/></svg><span>पाठ</span></a>
+    <a href="#/practice" data-tab="practice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>अभ्यास</span></a>
+    <a href="#/tools" data-tab="tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span>औजार</span></a>
+    <a href="#/progress" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg><span>प्रगति</span></a>
+  </nav>
+
+  <dialog id="sheet" aria-label="सूत्र">
+    <div class="sheet-head"><span class="grab"></span><button class="sheet-close" aria-label="बन्द">✕</button></div>
+    <div class="sheet-body"></div>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+
+  <noscript>यो एप चलाउन JavaScript चाहिन्छ।</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "संस्कृत सहायक",
+  "short_name": "सहायक",
+  "description": "लघुसिद्धान्तकौमुदी अनुसार संस्कृत व्याकरण — सूत्र, सन्धि, प्रत्याहार, अभ्यास र प्रगति।",
+  "lang": "ne",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f1e5",
+  "theme_color": "#8a2b2b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
