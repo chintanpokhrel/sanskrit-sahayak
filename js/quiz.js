@@ -6,6 +6,7 @@ import { parse, render, isVowel, isConsonant, last, baseVowel, describe, savarna
 import { SUTRAS, ROLES } from './content/sutras.js';
 import { LESSONS } from './content/lessons.js';
 import { SHABDA, DHATU, VIBHAKTI, VACANA, PURUSHA, LAKARA } from './content/rupa.js';
+import { DHATUS, GANAS, LAKARAS, PADA, ENDINGS, JOIN, joinClass, endingVarga, vargaName, buildAnga, derive, padasOf } from './tinanta.js';
 
 const rand = (n) => Math.floor(Math.random() * n);
 const pick = (arr) => arr[rand(arr.length)];
@@ -143,6 +144,43 @@ const GEN = {
     const others = Object.values(dh.forms).flat(2).filter((f) => f !== correct);
     const lname = LAKARA.find((l) => l.key === lk).name;
     return mcq('dhatu', `<span class="skt">${dh.name}</span> — ${lname}, ${PURUSHA[p]} ${VACANA[n]}?`, correct, others, `<span class="skt">${correct}</span>`);
+  },
+
+  // ---- तिङन्त (सहजबोध) ----
+  tinForm() {
+    const dh = pick(DHATUS), L = pick(LAKARAS), pada = pick(padasOf(dh)), p = rand(3), n = rand(3);
+    const r = derive(dh, L.key, pada, p, n);
+    const sameTable = [0, 1, 2].flatMap((pp) => [0, 1, 2].map((nn) => derive(dh, L.key, pada, pp, nn).form));
+    const otherLak = LAKARAS.filter((x) => x.key !== L.key).map((x) => derive(dh, x.key, pada, p, n).form);
+    return mcq('tin', `<span class="skt">${dh.u} ${dh.a}</span> (${dh.ne}) — ${L.name}, ${PADA[pada]}, ${PURUSHA[p]} ${VACANA[n]}?`, r.form,
+      [...shuffle(otherLak), ...shuffle(sameTable)].filter((f) => !r.alts.includes(f)),
+      `अङ्ग <span class="skt">${r.anga}</span> → <span class="skt">${[r.form, ...r.alts].join(' / ')}</span>`);
+  },
+  angaOf() {
+    const dh = pick(DHATUS);
+    const correct = buildAnga(dh).angaStr;
+    const wrong = ['bhvadi', 'divadi', 'tudadi', 'curadi'].filter((g) => g !== dh.g)
+      .map((g) => buildAnga({ ...dh, g, sp: undefined, adanta: false, id: `${dh.id}~${g}` }).angaStr);
+    return mcq('tin', `<span class="skt">${dh.u} ${dh.a}</span> — ${GANAS[dh.g].name} (${GANAS[dh.g].vik})। सार्वधातुक प्रत्ययका लागि अङ्ग के हुन्छ?`, correct, wrong,
+      `${GANAS[dh.g].name}: <span class="skt">${dh.d} → ${correct}</span>`);
+  },
+  pratyayaVarga() {
+    const L = pick(LAKARAS), pada = pick(['P', 'A']), p = rand(3), n = rand(3);
+    const e = ENDINGS[L.key][pada][p][n].split('|').filter(Boolean)[0];
+    const v = vargaName(endingVarga(L.key, pada, p, n, e));
+    return mcq('tin', `${L.name}, ${PADA[pada]}, ${PURUSHA[p]} ${VACANA[n]} को तयार प्रत्यय "<span class="skt">${e}</span>" कुन वर्गको हो?`, v,
+      ['हलादि पित्', 'अजादि पित्', 'हलादि अपित्', 'अजादि अपित्'],
+      'पित्: लट्/लङ् परस्मैपद एकवचन (तिप्, सिप्, मिप् बाट), लोट् को तु र उत्तम पुरुष (आट् पित्)। बाँकी सबै अपित्।');
+  },
+  joinSutra() {
+    const L = pick(LAKARAS), pada = pick(['P', 'A']), p = rand(3), n = rand(3);
+    const e = ENDINGS[L.key][pada][p][n].split('|')[0];
+    const j = joinClass(e);
+    if (!JOIN[j].s) return null;
+    const r = derive('ni', L.key, pada, p, n);
+    const ids = [...new Set(Object.values(JOIN).map((x) => x.s).filter(Boolean))];
+    return mcq('tin', `<span class="skt">${L.key === 'lan' ? 'अनय' : 'नय'} + ${e} = ${r.form}</span><br>अङ्ग र प्रत्यय कुन सूत्रले जोडिए?`, SUTRAS[JOIN[j].s].t,
+      ids.filter((x) => x !== JOIN[j].s).map((x) => SUTRAS[x].t), `${sref(JOIN[j].s)} — ${JOIN[j].n}`);
   },
 };
 

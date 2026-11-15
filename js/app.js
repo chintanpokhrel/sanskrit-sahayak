@@ -4,11 +4,14 @@
 import { T } from './i18n.js';
 import { sandhi } from './sandhi.js';
 import { STHANA, VARGAS, VOWELS, ANTAHSTHA, USHMA, MAHESHVARA, SEQ, PRATYAHARAS, pratyaharaMembers, pratyaharaRange, pratyaharaName, describe, savarna, show, sutraNum, toDevDigits } from './varna.js';
-import { SUTRAS, TYPES, ROLES } from './content/sutras.js';
+import { SUTRAS, TYPES, ROLES, sutraKey, adhikarasOf } from './content/sutras.js';
 import { UNITS, LESSONS, lessonById } from './content/lessons.js';
 import { SHABDA, DHATU, SUP, TIN, LAKARA, VIBHAKTI, VACANA, PURUSHA, PRAKRIYA } from './content/rupa.js';
 import { buildQuiz, examplesFor, shuffle } from './quiz.js';
 import { store, requestPersistence } from './store.js';
+import { DHATUS, GANAS, dhatuById, LAKARAS, PADA, ENDINGS, JOIN, JOIN_ORDER, joinClass, endingVarga, vargaName, ANGA_VARGA, angaVarga, buildAnga, derive, padasOf, tinSweep } from './tinanta.js';
+import { sandhiSweep } from './sweep.js';
+import { parse } from './varna.js';
 
 const view = document.getElementById('view');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -76,11 +79,11 @@ function revealSandhi(id, all) {
 const table = (head, rows, cls = '') => `<div class="tbl-wrap"><table class="${cls}"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 
-function prakriyaHtml(key) {
-  const p = PRAKRIYA[key];
-  return `<div class="prakriya"><h4 class="skt">${p.title}</h4><ol>${p.steps.map((st) =>
-    `<li><div class="pf skt">${st.f}</div><div class="step-sutras">${[].concat(st.s).map((s) => sutraChip(s, 'mini')).join('')}</div><div class="step-note">${st.n}</div></li>`).join('')}</ol></div>`;
-}
+/** Ordered derivation: steps [{ f: form, s: sūtra id(s), n: note }]. */
+const stepsHtml = (title, steps) => `<div class="prakriya">${title ? `<h4 class="skt">${title}</h4>` : ''}<ol>${steps.map((st) =>
+  `<li><div class="pf skt">${esc(st.f)}</div><div class="step-sutras">${[].concat(st.s || []).map((s) => sutraChip(s, 'mini')).join('')}</div><div class="step-note">${esc(st.n)}</div></li>`).join('')}</ol></div>`;
+
+const prakriyaHtml = (key) => stepsHtml(PRAKRIYA[key].title, PRAKRIYA[key].steps);
 
 const shabdaHtml = (key) => {
   const sh = SHABDA[key];
@@ -175,6 +178,103 @@ const VISARGA_ROWS = [
   ['इ उ ए…', 'र', 'लोप + दीर्घ', ['हरिः', 'रम्यः']],
 ];
 
+// ---- तिङन्त (सहजबोध दृष्टि) widgets ------------------------------------------------------------
+const lakName = (k) => LAKARAS.find((l) => l.key === k).name;
+const forEachEnding = (fn) => LAKARAS.forEach(({ key: lk }) => ['P', 'A'].forEach((pada) => ENDINGS[lk][pada].forEach((row, p) => row.forEach((cell, n) =>
+  cell.split('|').forEach((e, k) => fn({ lk, pada, p, n, e, k }))))));
+
+/** चार वर्ग: which ready-made endings and vikaraṇas fall in each. */
+function pratyayaVargaHtml() {
+  const box = { 'हलादि पित्': new Set(), 'अजादि पित्': new Set(), 'हलादि अपित्': new Set(), 'अजादि अपित्': new Set() };
+  forEachEnding(({ lk, pada, p, n, e }) => { if (e) box[vargaName(endingVarga(lk, pada, p, n, e))].add(e); });
+  const vik = { 'अजादि पित्': 'शप्', 'अजादि अपित्': 'श, शानच्, शतृ', 'हलादि अपित्': 'श्यन्, श्नु, श्ना, श्नम्', 'हलादि पित्': '—' };
+  const cell = (k) => `<div class="pv-cell"><b>${toDevDigits(box[k].size)}</b> <span class="skt">${[...box[k]].join(' · ')}</span>
+    <div class="small muted">विकरण/कृत्: <span class="skt">${vik[k]}</span></div></div>`;
+  return `<div class="tbl-wrap"><table class="pv"><thead><tr><th></th><th>हलादि (व्यञ्जनबाट सुरु)</th><th>अजादि (स्वरबाट सुरु)</th></tr></thead><tbody>
+    <tr><th>पित् <small class="muted">— गुण हुन सक्छ</small></th><td>${cell('हलादि पित्')}</td><td>${cell('अजादि पित्')}</td></tr>
+    <tr><th>अपित् <small class="muted">— ङिद्वत्, गुण हुँदैन</small></th><td>${cell('हलादि अपित्')}</td><td>${cell('अजादि अपित्')}</td></tr>
+    </tbody></table></div><p class="small muted">प्रथम गणसमूहका ७४ तयार प्रत्यय (दोहोरिएका एक पटक मात्र गनिएका)।</p>`;
+}
+
+/** अङ्ग × प्रत्यय: what the aṅga undergoes before each class of sārvadhātuka pratyaya. */
+const ANGA_MATRIX = [
+  ['adanta', [['सन्धि मात्र; व/म भए अ दीर्घ', '7.3.101', 'भव + मि = भवामि'], ['सन्धि मात्र', '6.1.101', 'भव + आनि = भवानि'],
+    ['सन्धि मात्र; व/म भए अ दीर्घ', '7.3.101', 'भव + वः = भवावः'], ['सन्धि मात्र (अ/ए भए पररूप)', '6.1.97', 'भव + अन्ति = भवन्ति']]],
+  ['akaranta', [['केही हुँदैन', null, 'या + ति = याति'], ['केही हुँदैन; सवर्ण दीर्घ', '6.1.101', 'या + आनि = यानि'],
+    ['श्ना/अभ्यस्त भए आ → ई', '6.4.113', 'क्रीणा + तः = क्रीणीतः'], ['श्ना/अभ्यस्त भए आ लोप', '6.4.112', 'क्रीणा + अन्ति = क्रीणन्ति']]],
+  ['igant', [['अन्तिम इक् गुण', '7.3.84', 'चिनु + ति = चिनोति'], ['गुण, अनि अयादि', '7.3.84', 'जि + अ (शप्) = जय'],
+    ['गुण निषेध', '1.1.5', 'चिनु + तः = चिनुतः'], ['गुण निषेध; इयङ्/उवङ्', '6.4.77', 'रि + अ (श) = रिय']]],
+  ['ejanta', [['—', null, ''], ['अयादि', '6.1.78', 'ग्लै + अ (शप्) = ग्लाय'], ['—', null, ''], ['—', null, '']]],
+  ['laghu', [['उपधा गुण', '7.3.86', 'विद् + ति = वेत्ति'], ['उपधा गुण', '7.3.86', 'बुध् + अ (शप्) = बोध'],
+    ['गुण निषेध', '1.1.5', 'विद् + तः = वित्तः'], ['गुण निषेध', '1.1.5', 'तुद् + अ (श) = तुद']]],
+  ['shesha', [['केही हुँदैन', null, 'अद् + ति = अत्ति'], ['केही हुँदैन', null, 'वद् + अ (शप्) = वद'],
+    ['केही हुँदैन', null, 'अद् + तः = अत्तः'], ['केही हुँदैन', null, 'अद् + अन्ति = अदन्ति']]],
+];
+const angaMatrixHtml = () => `<div class="tbl-wrap"><table class="am"><thead><tr><th>अङ्ग ↓ · प्रत्यय →</th><th>हलादि पित्</th><th>अजादि पित्</th><th>हलादि अपित्</th><th>अजादि अपित्</th></tr></thead><tbody>
+  ${ANGA_MATRIX.map(([k, cells]) => `<tr><th>${ANGA_VARGA[k]}</th>${cells.map(([what, s, ex]) =>
+    `<td><div>${what}</div>${s ? sutraChip(s, 'mini') : ''}${ex ? `<div class="skt small">${ex}</div>` : ''}</td>`).join('')}</tr>`).join('')}
+  </tbody></table></div>`;
+
+const dhatuLabel = (dh) => `${dh.u} ${dh.a}`;
+const dhatuChips = (act, sel) => Object.entries(GANAS).map(([g, G]) => `<div class="gana-row"><small class="muted">${G.name}</small><div class="chips">${DHATUS.filter((d) => d.g === g).map((d) =>
+  `<button class="chip skt ${d.id === sel ? 'on' : ''}" data-act="${act}" data-dh="${d.id}" title="${esc(d.ne)}">${d.d}</button>`).join('')}</div></div>`).join('');
+
+function angaBuilderHtml(sel = 'ni') {
+  const dh = dhatuById(sel), A = buildAnga(dh);
+  return `<div class="ab" data-dh="${sel}">${dhatuChips('ab', sel)}
+    ${stepsHtml(`${dhatuLabel(dh)} (${dh.ne}) — ${GANAS[dh.g].name}`, [...A.pre, ...A.steps])}
+    <p class="ab-out">अङ्ग: <b class="skt">${A.angaStr}</b> <span class="tag">${ANGA_VARGA[angaVarga(parse(A.angaStr))]}</span></p></div>`;
+}
+
+/** The 74 endings, coloured by how they join an अदन्त अङ्ग; पित् endings in bold (as in सहजबोध). */
+function endingsTableHtml() {
+  const cell = (lk, pada, p, n) => ENDINGS[lk][pada][p][n].split('|').map((e, k) => {
+    const pit = endingVarga(lk, pada, p, n, e).pit;
+    return `<span class="end j-${joinClass(e)} ${pit ? 'pit' : ''}">${e || '०'}</span>`;
+  }).join(' / ');
+  const legend = `<div class="chips">${JOIN_ORDER.map((j) => `<span class="end j-${j}">${JOIN[j].label}</span>`).join('')}<span class="end pit">गाढा = पित्</span></div>`;
+  const head = ['', ...['P', 'A'].flatMap((x) => VACANA.map((v) => `${x === 'P' ? 'पर.' : 'आत्मने.'} ${v.replace('वचन', '')}`))];
+  return legend + LAKARAS.map(({ key: lk, name }) => `<h4>${name}</h4>` + table(head,
+    [0, 1, 2].map((p) => [PURUSHA[p], ...[0, 1, 2].map((n) => cell(lk, 'P', p, n)), ...[0, 1, 2].map((n) => cell(lk, 'A', p, n))]), 'rupa ends')).join('');
+}
+
+/** सबै ७४ प्रत्यय नय मा जोडेर, join class अनुसार — one sūtra, all its applications at once. */
+function joinClassesHtml() {
+  const by = Object.fromEntries(JOIN_ORDER.map((j) => [j, []]));
+  forEachEnding(({ lk, pada, p, n, e, k }) => {
+    const r = derive('ni', lk, pada, p, n);
+    by[joinClass(e)].push(`${lk === 'lan' ? 'अनय' : 'नय'} + ${e || '०'} = ${k ? r.alts[k - 1] : r.form}`);
+  });
+  return JOIN_ORDER.map((j) => `<div class="jc card"><div class="row between wrap"><b>${JOIN[j].label}</b>${JOIN[j].s ? sutraChip(JOIN[j].s, 'mini') : ''}</div>
+    <p class="small muted">${JOIN[j].n}</p><div class="jc-list skt">${by[j].map((x) => `<span>${x}</span>`).join('')}</div>
+    <small class="muted">${toDevDigits(by[j].length)} रूप</small></div>`).join('');
+}
+
+/** धातुरूप गणक: dhātu, lakāra, pada → 3×3 table; the chosen cell's derivation below. */
+function tinToolHtml({ dh = 'ni', lk = 'lat', pada, c = '00' } = {}) {
+  const D = dhatuById(dh) || dhatuById('ni');
+  const padas = padasOf(D);
+  const pd = padas.includes(pada) ? pada : padas[0];
+  const [cp, cn] = [+c[0], +c[1]];
+  const st = { dh: D.id, lk, pada: pd, c };
+  const btn = (k, v, label, on) => `<button class="chip ${on ? 'on' : ''}" data-act="tt" data-k="${k}" data-v="${v}" data-st='${JSON.stringify(st)}'>${label}</button>`;
+  const r = derive(D.id, lk, pd, cp, cn);
+  const opts = Object.entries(GANAS).map(([g, G]) => `<optgroup label="${G.name}">${DHATUS.filter((d) => d.g === g).map((d) =>
+    `<option value="${d.id}" ${d.id === D.id ? 'selected' : ''}>${d.d} — ${esc(d.ne)}</option>`).join('')}</optgroup>`).join('');
+  const grid = [0, 1, 2].map((p) => [PURUSHA[p], ...[0, 1, 2].map((n) => {
+    const x = derive(D.id, lk, pd, p, n);
+    return `<button class="cellbtn skt ${p === cp && n === cn ? 'on' : ''}" data-act="tt" data-k="c" data-v="${p}${n}" data-st='${JSON.stringify(st)}'>${x.form}${x.alts.length ? `<small>/${x.alts.join('/')}</small>` : ''}</button>`;
+  })]);
+  return `<div class="tt">
+    <label class="tt-sel"><span>${T.tin.dhatu}</span><select class="skt" data-tt-st='${JSON.stringify(st)}'>${opts}</select></label>
+    <p class="small muted"><span class="skt">${dhatuLabel(D)}</span> · ${D.ne} · ${GANAS[D.g].name} (${GANAS[D.g].vik}) · ${T.tin.anga}: <b class="skt">${buildAnga(D, pd).angaStr}</b></p>
+    <div class="chips">${LAKARAS.map((L) => btn('lk', L.key, L.name, L.key === lk)).join('')}</div>
+    ${padas.length > 1 ? `<div class="chips">${padas.map((x) => btn('pada', x, PADA[x], x === pd)).join('')}</div>` : `<p class="small muted">${PADA[pd]}</p>`}
+    ${table(['', ...VACANA], grid, 'rupa tt-grid')}
+    ${stepsHtml(`${r.form}${r.alts.length ? ` / ${r.alts.join(' / ')}` : ''} — ${lakName(lk)}, ${PURUSHA[cp]} ${VACANA[cn]}`, r.steps)}
+  </div>`;
+}
+
 const WIDGETS = {
   sthana: () => table(['स्थान', 'वर्ण', 'शिक्षा वचन'], STHANA.map((s) => [s.name, `<span class="skt">${s.letters.join(' ')}</span>`, `<span class="skt small">${s.rule}</span>`])),
   varna: varnaGridHtml,
@@ -199,6 +299,12 @@ const WIDGETS = {
   tin: () => table(['पुरुष', ...VACANA], TIN.parasmai.map((r, i) => [PURUSHA[i], ...r.map((x, j) => `<span class="skt">${x}</span> · <span class="skt muted">${TIN.atmane[i][j]}</span>`)]), 'rupa')
     + '<p class="muted small">पहिलो: परस्मैपद · दोस्रो (खैरो): आत्मनेपद</p>',
   lakara: () => table(['लकार', 'प्रयोग'], LAKARA.map((l) => [`<b class="skt">${l.name}</b>`, l.use])),
+  pratyayaVarga: pratyayaVargaHtml,
+  angaMatrix: angaMatrixHtml,
+  angaBuilder: (a = {}) => angaBuilderHtml(a.dh),
+  endingsTable: endingsTableHtml,
+  joinClasses: joinClassesHtml,
+  tinTool: (a = {}) => tinToolHtml(a),
 };
 
 function renderBlock(b) {
@@ -223,13 +329,41 @@ function renderBlock(b) {
 const sheet = document.getElementById('sheet');
 const ALL_EX = LESSONS.flatMap((l) => l.ex || []);
 
+const SUTRA_ORDER = Object.keys(SUTRAS).sort((a, b) => sutraKey(a) - sutraKey(b));
+
+/** Where the sūtra sits in the Aṣṭādhyāyī: governing headings and its neighbours in this app. */
+function kramaHtml(id) {
+  const adh = adhikarasOf(id);
+  const i = SUTRA_ORDER.indexOf(id), prev = SUTRA_ORDER[i - 1], next = SUTRA_ORDER[i + 1];
+  if (sutraKey(id) >= 9e9) return '';
+  return `<div class="krama"><b>${T.krama.where}</b>
+    ${adh.length ? `<div>${T.krama.under}: ${adh.map((a) => SUTRAS[a.from] ? sutraChip(a.from, 'mini') : `<span class="chip muted skt">${a.t} <small>${sutraNum(a.from)}–${sutraNum(a.to)}</small></span>`).join(' ')}</div>` : ''}
+    <div class="row between small">${prev && sutraKey(prev) < 9e9 ? `<span>← ${sutraChip(prev, 'mini')}</span>` : '<span></span>'}${next && sutraKey(next) < 9e9 ? `<span>${sutraChip(next, 'mini')} →</span>` : ''}</div>
+    <p class="small muted">${T.krama.gap}</p></div>`;
+}
+
+/** सबै प्रयोग: every junction (sandhi) or form (tiṅanta) where the engines apply this sūtra. */
+function sweepHtml(id) {
+  const grids = sandhiSweep(id).map((g) => `<p class="small"><b>${g.title}</b></p><div class="tbl-wrap"><table class="sweep"><thead><tr><th></th>${g.cols.map((c) => `<th class="skt">${c}</th>`).join('')}</tr></thead>
+    <tbody>${g.rows.map((r) => `<tr><th class="skt">${r.label}</th>${r.cells.map((c) => `<td class="skt ${c.hit ? 'hit' : ''}">${esc(c.txt) || '·'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('');
+  const forms = tinSweep().get(id) || [];
+  const seen = new Set(), pick = [];
+  for (const f of forms) if (!seen.has(f.dh) && pick.length < 12) { seen.add(f.dh); pick.push(f); }
+  const tin = forms.length ? `<p class="small">${T.sweep.forms(toDevDigits(forms.length), toDevDigits(new Set(forms.map((f) => f.dh)).size))}</p>
+    <div class="chips">${pick.map((f) => `<a class="chip" href="#/tools/tin/${f.dh}/${f.lk}/${f.pada}/${f.p}${f.n}"><span class="skt">${f.form}</span> <small class="muted">${dhatuById(f.dh).d} · ${lakName(f.lk)}</small></a>`).join('')}</div>` : '';
+  if (!grids && !tin) return '';
+  return `<h4>${T.sweep.title}</h4><p class="small muted">${T.sweep.sub}</p>${grids}${tin}`;
+}
+
 function openSutra(id) {
   if (!SUTRAS[id]) return;
   const lessons = LESSONS.filter((l) => l.sutras.includes(id));
   const exs = ALL_EX.filter(([a, b, , o]) => sandhi(a, b, o || {}).steps.some((s) => s.s === id || s.also.includes(id))).slice(0, 4);
   sheet.querySelector('.sheet-body').innerHTML = sutraCard(id, { full: true })
     + (lessons.length ? `<p class="muted">${T.inLesson}: ${lessons.map((l) => `<a href="#/lesson/${l.id}" data-act="close-sheet">${l.title}</a>`).join(', ')}</p>` : '')
-    + (exs.length ? `<h4>${T.examples}</h4>${exs.map(([a, b, , o]) => sandhiCard(a, b, o || {}, { open: true })).join('')}` : '');
+    + kramaHtml(id)
+    + (exs.length ? `<h4>${T.examples}</h4>${exs.map(([a, b, , o]) => sandhiCard(a, b, o || {}, { open: true })).join('')}` : '')
+    + sweepHtml(id);
   if (!sheet.open) sheet.showModal();
   sheet.querySelector('.sheet-body').scrollTop = 0;
 }
@@ -357,6 +491,7 @@ const PRACTICE = {
   sutra: () => buildQuiz(['sutraArtha', 'padaRole'], { sutras: doneSutras().length >= 4 ? doneSutras() : Object.keys(SUTRAS) }, 10),
   rupa: () => buildQuiz(['rupa'], {}, 10),
   dhatu: () => buildQuiz(['dhatu'], {}, 10),
+  tin: () => buildQuiz(['tinForm', 'angaOf', 'pratyayaVarga', 'joinSutra'], {}, 10),
 };
 
 function practiceView() {
@@ -445,16 +580,30 @@ function dhatuToolView() {
   view.innerHTML = header(T.tools.dhatu[0], T.tools.dhatu[1], '#/tools') + dhatuHtml('bhu');
 }
 
-function sutraIndexView() {
-  const order = [...new Set([...LESSONS.flatMap((l) => l.sutras), ...Object.keys(SUTRAS)])];
+function tinToolView(dh, lk, pada, c) {
+  view.innerHTML = header(T.tools.tin[0], T.tools.tin[1], '#/tools') + tinToolHtml({ dh, lk, pada, c });
+}
+
+function sutraIndexView(mode) {
+  const krama = mode === 'krama';
+  const order = krama ? SUTRA_ORDER : [...new Set([...LESSONS.flatMap((l) => l.sutras), ...Object.keys(SUTRAS)])];
+  const pada = (id) => (sutraKey(id) < 9e9 ? id.split('.').slice(0, 2).join('.') : 'v');
+  const item = (id) => `<li data-k="${esc(SUTRAS[id].t + ' ' + id + ' ' + sutraNum(id))}"><button class="sref wide" data-sutra="${id}">
+        <span class="skt">${SUTRAS[id].t}</span><small>${sutraNum(id)} · ${TYPES[SUTRAS[id].ty]}</small></button></li>`;
+  const body = krama
+    ? order.map((id, i) => (i === 0 || pada(id) !== pada(order[i - 1])
+      ? `<li class="pada-h">${pada(id) === 'v' ? 'वार्त्तिक' : T.krama.pada(...pada(id).split('.').map(toDevDigits))}</li>` : '') + item(id)).join('')
+    : order.map(item).join('');
   view.innerHTML = header(T.tools.sutras[0], `${toDevDigits(order.length)} सूत्र`, '#/tools')
+    + `<div class="chips"><a class="chip ${krama ? '' : 'on'}" href="#/tools/sutras">${T.krama.lessonOrder}</a><a class="chip ${krama ? 'on' : ''}" href="#/tools/sutras/krama">${T.krama.astOrder}</a></div>`
+    + (krama ? `<p class="small muted">${T.krama.hint}</p>` : '')
     + `<input class="search" type="search" id="sq" placeholder="${T.searchSutra}">`
-    + `<ul class="sutra-index">${order.map((id) => `<li data-k="${esc(SUTRAS[id].t + ' ' + id + ' ' + sutraNum(id))}"><button class="sref wide" data-sutra="${id}">
-        <span class="skt">${SUTRAS[id].t}</span><small>${sutraNum(id)} · ${TYPES[SUTRAS[id].ty]}</small></button></li>`).join('')}</ul>`;
+    + `<ul class="sutra-index">${body}</ul>`;
   const q = document.getElementById('sq');
   q.oninput = () => {
     const s = q.value.trim().replace(/[।\.]/g, '');
-    view.querySelectorAll('.sutra-index li').forEach((li) => { li.hidden = !!s && !li.dataset.k.replace(/[।\.]/g, '').includes(s); });
+    view.querySelectorAll('.sutra-index li[data-k]').forEach((li) => { li.hidden = !!s && !li.dataset.k.replace(/[।\.]/g, '').includes(s); });
+    view.querySelectorAll('.sutra-index .pada-h').forEach((h) => { h.hidden = !!s; });
   };
 }
 
@@ -500,7 +649,8 @@ const ROUTES = [
   [/^#\/tools\/pratyahara$/, pratyaharaToolView, 'tools'],
   [/^#\/tools\/rupa$/, () => rupaToolView(), 'tools'],
   [/^#\/tools\/dhatu$/, dhatuToolView, 'tools'],
-  [/^#\/tools\/sutras$/, sutraIndexView, 'tools'],
+  [/^#\/tools\/sutras(?:\/(krama))?$/, sutraIndexView, 'tools'],
+  [/^#\/tools\/tin(?:\/(\w+)\/(\w+)\/([PA])\/([0-2][0-2]))?$/, tinToolView, 'tools'],
   [/^#\/progress$/, progressView, 'progress'],
 ];
 
@@ -540,6 +690,13 @@ document.addEventListener('click', (e) => {
   else if (act === 'varna') onVarna(a);
   else if (act === 'dhatu-tab') a.closest('.dhatu').outerHTML = dhatuHtml(a.dataset.dh, a.dataset.lk);
   else if (act === 'rupa') rupaToolView(a.dataset.k);
+  else if (act === 'ab') a.closest('.ab').outerHTML = angaBuilderHtml(a.dataset.dh);
+  else if (act === 'tt') {
+    const st = { ...JSON.parse(a.dataset.st), [a.dataset.k]: a.dataset.v };
+    const root = a.closest('.tt');
+    root.outerHTML = tinToolHtml(st);
+    if (a.dataset.k === 'c') document.querySelector('.tt .prakriya')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   else if (act === 'close-sheet') sheet.close();
   else if (act === 'done-lesson') {
     const l = lessonById(a.dataset.id);
@@ -558,6 +715,10 @@ document.addEventListener('click', (e) => {
     if (!resetArmed) { resetArmed = true; a.textContent = T.resetConfirm; setTimeout(() => { resetArmed = false; if (a.isConnected) a.textContent = T.reset; }, 4000); }
     else { resetArmed = false; store.reset(); progressView(); }
   } else if (act === 'install' && deferredInstall) { deferredInstall.prompt(); deferredInstall = null; a.remove(); }
+});
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest('select[data-tt-st]');
+  if (sel) sel.closest('.tt').outerHTML = tinToolHtml({ ...JSON.parse(sel.dataset.ttSt), dh: sel.value, c: '00' });
 });
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('article.sutra[data-sutra]')) { e.preventDefault(); openSutra(e.target.dataset.sutra); }

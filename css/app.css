@@ -233,6 +233,40 @@ table.rupa td .skt, table.center td .skt { font-size: 1.1em; }
 .sform .plus { font-size: 1.4rem; color: var(--muted); padding-top: 18px; }
 .sform .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: .95em; }
 .sutra-index { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.sutra-index li { min-width: 0; }
+.sref.wide > span { min-width: 0; overflow-wrap: anywhere; }
+.sref.wide > small { flex: none; }
+.sutra-index .pada-h { font-size: .85em; font-weight: 700; color: var(--accent-2); margin: 10px 0 0; }
+
+/* sūtra sheet: क्रम and सबै प्रयोग */
+.krama { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 10px 0; display: grid; gap: 6px; }
+.krama p { margin: 0; }
+table.sweep { width: auto; font-size: .9em; }
+table.sweep th, table.sweep td { padding: 4px 7px; text-align: center; white-space: nowrap; }
+table.sweep td { color: var(--muted); opacity: .55; }
+table.sweep td.hit { color: var(--ink); opacity: 1; background: color-mix(in srgb, var(--accent-2) 22%, var(--card)); font-weight: 600; }
+
+/* तिङन्त widgets */
+.pv-cell .skt { line-height: 1.9; }
+table.am th, table.am td { font-size: .9em; }
+table.am td .skt { color: var(--accent); margin-top: 2px; }
+.gana-row { margin: 6px 0; }
+.gana-row .chips { margin: 4px 0; gap: 6px; }
+.ab, .tt { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 12px 0; }
+.ab-out { font-size: 1.1rem; }
+.end { display: inline-block; border-radius: 6px; padding: 0 6px; font-family: var(--skt); border-left: 4px solid var(--jc, var(--line)); background: var(--bg); }
+.chips .end { font-family: var(--font); font-size: .85em; padding: 2px 8px; }
+.end.pit { font-weight: 800; }
+.j-pararupa { --jc: #c0392b; } .j-dirgha { --jc: #2e7d32; } .j-vrddhi { --jc: #7b3fa0; }
+.j-guna { --jc: #1f5fa8; } .j-yanadi { --jc: #c8641e; } .j-none { --jc: var(--line); } .j-zero { --jc: #8a7c6c; }
+table.ends td { white-space: nowrap; }
+.jc .jc-list { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; }
+.tt-sel { display: grid; gap: 4px; }
+.tt-sel span { font-size: .85em; color: var(--muted); }
+.tt select { width: 100%; font-size: 1.1rem; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.cellbtn { appearance: none; border: 1px solid transparent; background: none; color: var(--ink); font-size: 1.05em; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
+.cellbtn small { color: var(--muted); font-size: .8em; }
+.cellbtn.on { border-color: var(--accent); background: var(--tip); }
 
 /* progress */
 .prow { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; margin: 10px 0; }

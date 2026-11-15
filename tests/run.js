@@ -35,10 +35,37 @@ try {
   }
   for (const [k, p] of Object.entries(PRAKRIYA)) p.steps.forEach((st) => [].concat(st.s || []).forEach((id) => need(id, `prakriya ${k}`)));
   for (const [id, s] of Object.entries(SUTRAS)) if (!s.a) bad(`sūtra ${id} has no artha`);
+
+  // ---- tiṅanta engine ----
+  const { derive, DHATUS, padasOf, tinSweep } = await import('../js/tinanta.js');
+  const { DHATU } = await import('../js/content/rupa.js');
+  const { LAT3, LAN3, NI } = await import('./tinanta-cases.js');
+  const cell = (r) => [r.form, ...r.alts].join('/');
+  for (const dh of DHATUS) if (!LAT3[dh.id]) bad(`tinanta: no LAT3 case for ${dh.id}`);
+  for (const [id, e] of Object.entries(LAT3)) {
+    const dh = DHATUS.find((d) => d.id === id);
+    const got = derive(id, 'lat', padasOf(dh)[0], 0, 0).form;
+    if (got !== e) bad(`tinanta ${id} लट् = ${got} (expected ${e})`);
+  }
+  for (const [id, e] of Object.entries(LAN3)) {
+    const dh = DHATUS.find((d) => d.id === id);
+    const got = derive(id, 'lan', padasOf(dh)[0], 0, 0).form;
+    if (got !== e) bad(`tinanta ${id} लङ् = ${got} (expected ${e})`);
+  }
+  for (const [pada, lks] of Object.entries(NI)) for (const [lk, tbl] of Object.entries(lks)) tbl.forEach((row, p) => row.forEach((e, n) => {
+    const got = cell(derive('ni', lk, pada, p, n));
+    if (got !== e) bad(`tinanta नी ${lk} ${pada} [${p},${n}] = ${got} (expected ${e})`);
+  }));
+  // The static भू table in rupa.js must agree with the engine wherever the engine computes.
+  for (const lk of ['lat', 'lot', 'lan', 'lin']) DHATU.bhu.forms[lk].forEach((row, p) => row.forEach((e, n) => {
+    const got = cell(derive('bhu', lk, 'P', p, n));
+    if (got !== e) bad(`tinanta भू ${lk} [${p},${n}] = ${got} (rupa.js has ${e})`);
+  }));
+  for (const id of tinSweep().keys()) need(id, 'tinanta engine');
 } catch (e) {
   if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
   console.log('(content modules not present yet — skipped)');
 }
 
-console.log(fail ? `${fail} failure(s)` : `all ${CASES.length} engine cases + pratyāhāra + content checks pass`);
+console.log(fail ? `${fail} failure(s)` : `all ${CASES.length} sandhi cases + pratyāhāra + tiṅanta + content checks pass`);
 process.exit(fail ? 1 : 0);
