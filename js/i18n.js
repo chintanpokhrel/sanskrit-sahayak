@@ -4,7 +4,8 @@
 export const T = {
   appName: 'संस्कृत सहायक',
   tagline: 'लघुसिद्धान्तकौमुदीको साथी',
-  nav: { home: 'गृह', lessons: 'पाठ', practice: 'अभ्यास', tools: 'औजार', progress: 'प्रगति' },
+  nav: { home: 'गृह', lessons: 'पाठ', practice: 'अभ्यास', mh: 'माहेश्वर', tools: 'औजार', progress: 'प्रगति' },
+  sheet: { sutra: 'सूत्र', mh: 'माहेश्वर सूत्र र प्रत्याहार' },
 
   // home
   greet: 'नमस्ते!',

@@ -364,6 +364,17 @@ function openSutra(id) {
     + kramaHtml(id)
     + (exs.length ? `<h4>${T.examples}</h4>${exs.map(([a, b, , o]) => sandhiCard(a, b, o || {}, { open: true })).join('')}` : '')
     + sweepHtml(id);
+  showSheet(T.sheet.sutra);
+}
+
+/** Opens over the current page, so a lesson or quiz keeps its place. */
+function openMaheshvara() {
+  sheet.querySelector('.sheet-body').innerHTML = `<h2>${T.sheet.mh}</h2>` + maheshvaraRefHtml();
+  showSheet(T.sheet.mh);
+}
+
+function showSheet(label) {
+  sheet.setAttribute('aria-label', label);
   if (!sheet.open) sheet.showModal();
   sheet.querySelector('.sheet-body').scrollTop = 0;
 }
@@ -564,9 +575,13 @@ function sandhiToolView() {
   };
 }
 
+/** माहेश्वर सूत्र explorer + all 41 pratyāhāras. Shared by the tool page and the tab-bar quick sheet. */
+function maheshvaraRefHtml() {
+  return maheshvaraHtml('explore') + `<h3>${T.allPratyaharas}</h3>` + WIDGETS.pratyaharaTable({ list: PRATYAHARAS });
+}
+
 function pratyaharaToolView() {
-  view.innerHTML = header(T.tools.pratyahara[0], T.tools.pratyahara[1], '#/tools') + maheshvaraHtml('explore')
-    + `<h3>${T.allPratyaharas}</h3>` + WIDGETS.pratyaharaTable({ list: PRATYAHARAS })
+  view.innerHTML = header(T.tools.pratyahara[0], T.tools.pratyahara[1], '#/tools') + maheshvaraRefHtml()
     + `<div class="callout note">${LESSONS.find((l) => l.id === 'pratyahara').blocks.find((b) => b.t === 'note').h}</div>`;
 }
 
@@ -698,6 +713,7 @@ document.addEventListener('click', (e) => {
     if (a.dataset.k === 'c') document.querySelector('.tt .prakriya')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   else if (act === 'close-sheet') sheet.close();
+  else if (act === 'mh-sheet') openMaheshvara();
   else if (act === 'done-lesson') {
     const l = lessonById(a.dataset.id);
     const before = store.deckSize();
@@ -745,6 +761,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading) { reloading = true; location.reload(); } });
 }
 
-document.querySelectorAll('.tabbar a').forEach((a) => { a.querySelector('span').textContent = T.nav[a.dataset.tab]; });
+document.querySelectorAll('.tabbar [data-tab]').forEach((a) => { a.querySelector('span').textContent = T.nav[a.dataset.tab]; });
 requestPersistence();
 route();

@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, cache-first; Google Fonts cached at runtime.
 // Bump VERSION on every deploy so clients pick up new files.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `sahayak-${VERSION}`;
 const FONTS = 'sahayak-fonts';
 const SHELL = [
