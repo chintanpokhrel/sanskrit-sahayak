@@ -23,6 +23,13 @@ const TAD = new Set(['सः', 'एषः']);
 /** For optional (वैकल्पिक) rules: which outcome is the commonly printed primary form. */
 const PREFER_APPLY = { '8.3.19': true, '8.3.36': true, '8.4.45': true, '8.4.59': false, '8.4.62': true, '8.4.63': true, '6.1.76': true };
 
+/** Sūtras the engine can switch off (rule lab): opts.off = Set of ids. A switched-off rule simply does not fire,
+ *  so the cascade falls through to whatever rule would apply without it — usually the utsarga it overrides. */
+export const SANDHI_SWITCHABLE = ['6.1.125', '6.1.109', '6.1.101', '6.1.87', '6.1.88', '6.1.77', '6.1.78', '8.3.19', '6.1.73',
+  '8.2.39', '8.4.40', '8.4.41', '8.4.45', '8.4.55', '8.4.60', '8.3.23', '8.3.32', '8.3.7', '6.1.132', '8.3.34', '8.3.36',
+  '6.1.113', '6.1.114', '8.3.17', '8.3.22', '8.3.14', '6.3.111'];
+const on = (c, id) => !c.opts.off?.has(id);
+
 const isAm = (p) => isVowel(p) || ['ह', 'य', 'व', 'र', 'ल', ...NASALS].includes(p);
 const isAt = (p) => isVowel(p) || ['ह', 'य', 'व', 'र'].includes(p);
 
@@ -75,22 +82,26 @@ function step(c, s, note, fn, extra = {}) {
   c.steps.push({ s, note, from, to: extra.to || display(c), also: extra.also || [] });
 }
 /** Should this optional rule apply in the current run? */
-const opt = (c, sid) => c.pref === PREFER_APPLY[sid];
+const opt = (c, sid) => on(c, sid) && c.pref === PREFER_APPLY[sid];
 
 // ---- अच् सन्धि -------------------------------------------------------------------------------
 function ac(c) {
+  acRules(c);
+  if (!c.steps.length) c.apart = true; // every rule switched off: the vowels stay side by side
+}
+function acRules(c) {
   const x = last(c.L), y = c.R[0];
-  if (c.opts.dual && ['ई', 'ऊ', 'ए'].includes(x)) {
+  if (on(c, '6.1.125') && c.opts.dual && ['ई', 'ऊ', 'ए'].includes(x)) {
     step(c, '1.1.11', `द्विवचनको अन्तिम ${x} — प्रगृह्य संज्ञा।`);
     step(c, '6.1.125', 'प्रगृह्य पछि स्वर आए पनि सन्धि हुँदैन (प्रकृतिभाव)।');
     c.apart = true; c.main = '6.1.125'; return;
   }
-  if (!c.opts.internal && (x === 'ए' || x === 'ओ') && y === 'अ') {
+  if (on(c, '6.1.109') && !c.opts.internal && (x === 'ए' || x === 'ओ') && y === 'अ') {
     step(c, '6.1.109', `पदान्त ${x} पछि ह्रस्व अ — दुवैको ठाउँमा पूर्वरूप (${x})। हटेको अ लाई ऽ ले देखाइन्छ।`,
       () => { c.R[0] = 'ऽ'; }, { also: ['6.1.84'] });
     c.main = '6.1.109'; return;
   }
-  if (inP(x, 'अक्') && inP(y, 'अक्') && savarna(x, y)) {
+  if (on(c, '6.1.101') && inP(x, 'अक्') && inP(y, 'अक्') && savarna(x, y)) {
     const bx = baseVowel(x), by = baseVowel(y);
     const v = bx === 'ऌ' && by === 'ऌ' ? 'ॡ' : (['ऋ', 'ऌ'].includes(bx) || ['ऋ', 'ऌ'].includes(by) ? 'ॠ' : LONG_OF[bx]);
     step(c, '6.1.101', `${x} (अक्) पछि सवर्ण ${y} — दुवैको ठाउँमा एउटै दीर्घ ${v}।`,
@@ -99,7 +110,7 @@ function ac(c) {
   }
   if (x === 'अ' || x === 'आ') {
     const by = baseVowel(y);
-    if (GUNA[by]) {
+    if (GUNA[by] && on(c, '6.1.87')) {
       const g = GUNA[by];
       const also = ['6.1.84', '1.1.50'];
       if (by === 'ऋ' || by === 'ऌ') also.push('1.1.51');
@@ -107,19 +118,19 @@ function ac(c) {
         () => { c.L.splice(-1, 1, ...g); c.R.shift(); merge(c); }, { also });
       c.main = '6.1.87'; return;
     }
-    if (VRDDHI[y]) {
+    if (VRDDHI[y] && on(c, '6.1.88')) {
       step(c, '6.1.88', `${x} पछि ${y} (एच्) — दुवैको ठाउँमा वृद्धि ${VRDDHI[y]}।`,
         () => { c.L.splice(-1, 1, VRDDHI[y]); c.R.shift(); merge(c); }, { also: ['6.1.84', '1.1.50'] });
       c.main = '6.1.88'; return;
     }
   }
-  if (inP(x, 'इक्')) {
+  if (on(c, '6.1.77') && inP(x, 'इक्')) {
     const yn = YAN[baseVowel(x)];
     step(c, '6.1.77', `${x} (इक्) पछि फरक स्वर ${y} (अच्) — ${x} को ठाउँमा यण् ${show(yn)}।`,
       () => setLast(c, yn), { also: ['1.1.50'] });
     c.main = '6.1.77'; return;
   }
-  if (AYADI[x]) {
+  if (on(c, '6.1.78') && AYADI[x]) {
     const r = AYADI[x];
     step(c, '6.1.78', `${x} (एच्) पछि ${y} (अच्) — ${x} को ठाउँमा ${render(r)}।`,
       () => { c.L.splice(-1, 1, ...r); });
@@ -136,7 +147,7 @@ function vowelConsonant(c) {
   const x = last(c.L), y = c.R[0];
   if (y === 'छ') {
     const short = SHORT.includes(x);
-    if (short || opt(c, '6.1.76')) {
+    if ((short && on(c, '6.1.73')) || (!short && opt(c, '6.1.76'))) {
       step(c, short ? '6.1.73' : '6.1.76', `${short ? 'ह्रस्व' : 'पदान्त दीर्घ'} ${x} पछि छ — बीचमा तुक् (त्) आगम।`, () => c.L.push('त'));
       step(c, '8.4.40', 'त् पछि छ (चवर्ग) — त् → च् (श्चुत्व)।', () => setLast(c, 'च'));
       c.main = short ? '6.1.73' : '6.1.76';
@@ -158,21 +169,21 @@ function hal(c) {
 
 function stopFinal(c) {
   const f = last(c.L), y = c.R[0];
-  if (JASH[f] !== f) step(c, '8.2.39', `पदको अन्त्यमा झल् ${show(f)} → जश् ${show(JASH[f])}।`, () => setLast(c, JASH[f]));
+  if (JASH[f] !== f && on(c, '8.2.39')) step(c, '8.2.39', `पदको अन्त्यमा झल् ${show(f)} → जश् ${show(JASH[f])}।`, () => setLast(c, JASH[f]));
   if (last(c.L) === 'द') {
-    if (CU.includes(y) || y === 'श') step(c, '8.4.40', `द् (तवर्ग) पछि ${show(y)} (श्चु) — द् → ज्।`, () => setLast(c, 'ज'));
-    else if (TU.includes(y)) step(c, '8.4.41', `द् (तवर्ग) पछि ${show(y)} (टवर्ग) — द् → ड्।`, () => setLast(c, 'ड'));
+    if ((CU.includes(y) || y === 'श') && on(c, '8.4.40')) step(c, '8.4.40', `द् (तवर्ग) पछि ${show(y)} (श्चु) — द् → ज्।`, () => setLast(c, 'ज'));
+    else if (TU.includes(y) && on(c, '8.4.41')) step(c, '8.4.41', `द् (तवर्ग) पछि ${show(y)} (टवर्ग) — द् → ड्।`, () => setLast(c, 'ड'));
     else if (y === 'ष') step(c, '8.4.43', 'तवर्ग पछि ष् — ष्टुत्व हुँदैन।');
   }
   const g = last(c.L);
   if (NASALS.includes(y) && NASAL_OF[g] && opt(c, '8.4.45')) {
     step(c, '8.4.45', `${show(g)} पछि अनुनासिक ${show(y)} — विकल्पले ${show(g)} → ${show(NASAL_OF[g])}।`, () => setLast(c, NASAL_OF[g]));
   }
-  if (KHAR.includes(y) && CAR[last(c.L)]) {
+  if (KHAR.includes(y) && CAR[last(c.L)] && on(c, '8.4.55')) {
     const h = last(c.L);
     step(c, '8.4.55', `${show(h)} पछि खर् ${show(y)} — ${show(h)} → चर् ${show(CAR[h])}।`, () => setLast(c, CAR[h]));
   }
-  if (y === 'ल' && last(c.L) === 'द') step(c, '8.4.60', 'तवर्ग पछि ल् — द् → ल् (परसवर्ण)।', () => setLast(c, 'ल'));
+  if (y === 'ल' && last(c.L) === 'द' && on(c, '8.4.60')) step(c, '8.4.60', 'तवर्ग पछि ल् — द् → ल् (परसवर्ण)।', () => setLast(c, 'ल'));
   if (y === 'ह' && FOURTH_OF[last(c.L)] && opt(c, '8.4.62')) {
     const h = last(c.L);
     step(c, '8.4.62', `${show(h)} (झय्) पछिको ह् → ${show(FOURTH_OF[h])} (पूर्वसवर्ण, विकल्प)।`, () => { c.R[0] = FOURTH_OF[h]; });
@@ -187,6 +198,7 @@ function stopFinal(c) {
 function mFinal(c) {
   const y = c.R[0];
   if (isVowel(y)) return; // हरिम् + अत्र → हरिमत्र
+  if (!on(c, '8.3.23')) return;
   step(c, '8.3.23', `पदान्त म् पछि व्यञ्जन ${show(y)} — म् → अनुस्वार।`, () => { setLast(c, 'ं'); c.apart = true; });
   c.main = '8.3.23';
   const vg = vargaOf(y);
@@ -199,13 +211,13 @@ function mFinal(c) {
 function nFinal(c) {
   const y = c.R[0], v = c.L[c.L.length - 2];
   if (isVowel(y)) {
-    if (SHORT.includes(v)) {
+    if (SHORT.includes(v) && on(c, '8.3.32')) {
       step(c, '8.3.32', `ह्रस्व ${v} पछिको पदान्त न्, त्यसपछि स्वर — स्वरलाई ङमुट् (न्) आगम।`, () => c.R.unshift('न'));
       c.main = '8.3.32';
     }
     return;
   }
-  if (['च', 'छ', 'ट', 'ठ', 'त', 'थ'].includes(y) && isAm(c.R[1])) {
+  if (['च', 'छ', 'ट', 'ठ', 'त', 'थ'].includes(y) && isAm(c.R[1]) && on(c, '8.3.7')) {
     step(c, '8.3.7', `पदान्त न् पछि ${show(y)} (छव्) र त्यसपछि अम् — न् → रु।`, () => setLast(c, 'रु'));
     step(c, '8.3.4', 'रु अघि अनुस्वार थपिन्छ (वा अघिल्लो स्वर अनुनासिक)।', () => c.L.splice(-1, 0, 'ं'));
     step(c, '8.3.15', 'खर् पछि रु → विसर्ग।', () => setLast(c, 'ः'));
@@ -214,9 +226,9 @@ function nFinal(c) {
     if (TU.includes(y)) step(c, '8.4.41', 'स् पछि टवर्ग — स् → ष्।', () => setLast(c, 'ष'));
     c.main = '8.3.7'; return;
   }
-  if (['ज', 'झ', 'ञ'].includes(y)) { step(c, '8.4.40', `न् पछि ${show(y)} (चवर्ग) — न् → ञ्।`, () => setLast(c, 'ञ')); c.main = '8.4.40'; return; }
-  if (['ड', 'ढ', 'ण'].includes(y)) { step(c, '8.4.41', `न् पछि ${show(y)} (टवर्ग) — न् → ण्।`, () => setLast(c, 'ण')); c.main = '8.4.41'; return; }
-  if (y === 'ल') {
+  if (['ज', 'झ', 'ञ'].includes(y) && on(c, '8.4.40')) { step(c, '8.4.40', `न् पछि ${show(y)} (चवर्ग) — न् → ञ्।`, () => setLast(c, 'ञ')); c.main = '8.4.40'; return; }
+  if (['ड', 'ढ', 'ण'].includes(y) && on(c, '8.4.41')) { step(c, '8.4.41', `न् पछि ${show(y)} (टवर्ग) — न् → ण्।`, () => setLast(c, 'ण')); c.main = '8.4.41'; return; }
+  if (y === 'ल' && on(c, '8.4.60')) {
     step(c, '8.4.60', 'न् पछि ल् — न् → अनुनासिक ल्ँ (परसवर्ण)।', () => c.L.splice(-1, 1, 'ँ', 'ल'));
     c.main = '8.4.60'; return;
   }
@@ -230,7 +242,7 @@ function visarga(c) {
   const rOrigin = c.rOrigin || R_ORIGIN.has(word);
   const right = render(c.R);
 
-  if (TAD.has(word) && isConsonant(y)) {
+  if (TAD.has(word) && isConsonant(y) && on(c, '6.1.132')) {
     step(c, '6.1.132', `${word} (तद्/एतद्) पछि व्यञ्जन — सु (विसर्ग) को लोप।`, () => { c.L.pop(); c.apart = true; });
     c.main = '6.1.132'; return;
   }
@@ -253,28 +265,29 @@ function visarga(c) {
       step(c, '8.3.36', `शर् ${show(y)} पछि — विकल्पले विसर्ग नै रहन्छ।`, () => { c.apart = true; });
       c.main = '8.3.36'; return;
     }
+    if (!on(c, '8.3.34')) { c.apart = true; c.main = '8.3.15'; return; }
     step(c, '8.3.34', `खर् ${show(y)} पछि विसर्ग → स्।`, () => setLast(c, 'स'));
-    if (CU.includes(y) || y === 'श') step(c, '8.4.40', `स् पछि ${show(y)} — स् → श्।`, () => setLast(c, 'श'));
-    if (TU.includes(y) || y === 'ष') step(c, '8.4.41', `स् पछि ${show(y)} — स् → ष्।`, () => setLast(c, 'ष'));
+    if ((CU.includes(y) || y === 'श') && on(c, '8.4.40')) step(c, '8.4.40', `स् पछि ${show(y)} — स् → श्।`, () => setLast(c, 'श'));
+    if ((TU.includes(y) || y === 'ष') && on(c, '8.4.41')) step(c, '8.4.41', `स् पछि ${show(y)} — स् → ष्।`, () => setLast(c, 'ष'));
     c.main = '8.3.34'; return;
   }
 
   // y is a vowel or a soft consonant (अश्)
   const ru = !rOrigin;
-  if (ru && v === 'अ' && y === 'अ') {
+  if (ru && v === 'अ' && y === 'अ' && on(c, '6.1.113')) {
     step(c, '6.1.113', 'ह्रस्व अ पछिको रु, त्यसपछि ह्रस्व अ — रु → उ।', () => setLast(c, 'उ'));
     step(c, '6.1.87', 'अ + उ → ओ (गुण)।', () => c.L.splice(-2, 2, 'ओ'));
     step(c, '6.1.109', 'पदान्त ओ पछि अ — पूर्वरूप; अ को ठाउँमा ऽ।', () => { c.R[0] = 'ऽ'; });
     c.main = '6.1.113'; return;
   }
-  if (ru && v === 'अ' && isConsonant(y)) {
+  if (ru && v === 'अ' && isConsonant(y) && on(c, '6.1.114')) {
     step(c, '6.1.114', `ह्रस्व अ पछिको रु, त्यसपछि हश् ${show(y)} — रु → उ।`, () => setLast(c, 'उ'));
     step(c, '6.1.87', 'अ + उ → ओ (गुण)।', () => { c.L.splice(-2, 2, 'ओ'); c.apart = true; });
     c.main = '6.1.114'; return;
   }
-  if (ru && (v === 'अ' || v === 'आ')) {
+  if (ru && (v === 'अ' || v === 'आ') && on(c, '8.3.17')) {
     step(c, '8.3.17', `${v} पछिको रु, त्यसपछि अश् ${show(y)} — रु → य्।`, () => setLast(c, 'य'));
-    if (isConsonant(y)) {
+    if (isConsonant(y) && on(c, '8.3.22')) {
       step(c, '8.3.22', `य् पछि व्यञ्जन ${show(y)} — य् को लोप (अनिवार्य)।`, () => { c.L.pop(); c.apart = true; });
       c.main = '8.3.22'; return;
     }
@@ -285,9 +298,9 @@ function visarga(c) {
     return;
   }
   if (ru) step(c, '1.3.2', 'रु को उँ इत् — लोप भई र् मात्र बाँकी।', () => setLast(c, 'र'), { also: ['1.3.9'] });
-  if (y === 'र') {
+  if (y === 'र' && on(c, '8.3.14')) {
     step(c, '8.3.14', 'र् पछि र् — पहिलो र् को लोप।', () => { c.L.pop(); c.apart = true; });
-    if (SHORT.includes(v) && ['अ', 'इ', 'उ'].includes(v)) {
+    if (SHORT.includes(v) && ['अ', 'इ', 'उ'].includes(v) && on(c, '6.3.111')) {
       step(c, '6.3.111', `र् लोप भएकाले अघिको ${v} (अण्) दीर्घ — ${LONG_OF[v]}।`, () => setLast(c, LONG_OF[v]));
     }
     c.main = '8.3.14'; return;

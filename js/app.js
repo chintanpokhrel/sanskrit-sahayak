@@ -5,84 +5,17 @@ import { T } from './i18n.js';
 import { sandhi } from './sandhi.js';
 import { STHANA, VARGAS, VOWELS, ANTAHSTHA, USHMA, MAHESHVARA, SEQ, PRATYAHARAS, pratyaharaMembers, pratyaharaRange, pratyaharaName, describe, savarna, show, sutraNum, toDevDigits } from './varna.js';
 import { SUTRAS, TYPES, ROLES, sutraKey, adhikarasOf } from './content/sutras.js';
-import { UNITS, LESSONS, lessonById } from './content/lessons.js';
+import { UNITS, LESSONS, lessonById, lessonsInPath, unitsInPath } from './content/lessons.js';
 import { SHABDA, DHATU, SUP, TIN, LAKARA, VIBHAKTI, VACANA, PURUSHA, PRAKRIYA } from './content/rupa.js';
 import { buildQuiz, examplesFor, shuffle } from './quiz.js';
 import { store, requestPersistence } from './store.js';
 import { DHATUS, GANAS, dhatuById, LAKARAS, PADA, ENDINGS, JOIN, JOIN_ORDER, joinClass, endingVarga, vargaName, ANGA_VARGA, angaVarga, buildAnga, derive, padasOf, tinSweep } from './tinanta.js';
 import { sandhiSweep } from './sweep.js';
 import { parse } from './varna.js';
+import { esc, sutraChip, sutraCard, sandhiCard, revealSandhi, table, stepsHtml, header } from './ui.js';
+import { READER_WIDGETS, onReaderClick, mapView, versesView, verseView, labView, isSwitchable, kritHtml, kritHintsHtml, anubandhaHtml, anubandhaTableHtml, verseOfDay } from './reader.js';
 
 const view = document.getElementById('view');
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let uid = 0;
-
-// ============================================================================================
-// Shared components
-// ============================================================================================
-
-const sutraChip = (id, cls = '') => SUTRAS[id]
-  ? `<button class="sref ${cls}" data-sutra="${id}"><span class="skt">${SUTRAS[id].t}</span> <small>${sutraNum(id)}</small></button>` : '';
-
-function sutraCard(id, { full = false } = {}) {
-  const s = SUTRAS[id];
-  if (!s) return '';
-  const pc = s.pc ? `<ul class="pc">${s.pc.map(([w, r, n]) =>
-    `<li class="r-${r}"><b class="skt">${w}</b><span class="role">${ROLES[r].label}</span>${full || r !== 'other' ? `<span class="pn">${n}</span>` : ''}</li>`).join('')}</ul>` : '';
-  return `<article class="sutra" ${full ? '' : `data-sutra="${id}" tabindex="0" role="button"`}>
-    <header><span class="snum">${sutraNum(id)}</span><span class="stype t-${s.ty}">${TYPES[s.ty]}</span></header>
-    <div class="stext skt">${s.t}</div>
-    ${pc}
-    ${s.av ? `<div class="av"><b>${T.anuvritti}:</b> ${s.av}</div>` : ''}
-    <p class="artha">${s.a}</p>
-    ${s.s ? `<p class="saral">${s.s}</p>` : ''}
-  </article>`;
-}
-
-function stepHtml(st) {
-  const chips = (st.s ? sutraChip(st.s) : `<span class="chip muted">${T.note}</span>`) + st.also.map((a) => sutraChip(a, 'mini')).join('');
-  const tx = st.from === st.to ? esc(st.from) : `${esc(st.from)} <span class="arrow">→</span> ${esc(st.to)}`;
-  return `<li class="step"><div class="step-sutras">${chips}</div><div class="step-tx skt">${tx}</div><div class="step-note">${esc(st.note)}</div></li>`;
-}
-
-function sandhiCard(w1, w2, opts = {}, { open = false } = {}) {
-  const r = sandhi(w1, w2, opts);
-  if (!r.ok) return `<div class="sx warn">${esc(T.sandhiErr[r.reason] || T.sandhiErr.unsupported)}</div>`;
-  const id = `sx${++uid}`;
-  const tags = (opts.internal ? `<span class="tag">${T.internal}</span>` : '') + (opts.dual ? `<span class="tag">${T.dual}</span>` : '');
-  const hasSteps = r.steps.length > 0;
-  const reveal = open || !hasSteps;
-  return `<div class="sx" id="${id}" data-shown="${reveal ? r.steps.length : 0}">
-    <div class="sx-q"><span class="skt">${esc(w1)} + ${esc(w2)}</span> <span class="eq">=</span>
-      <span class="sx-res skt" ${reveal ? '' : 'hidden'}>${esc(r.result)}</span><span class="sx-qm" ${reveal ? 'hidden' : ''}>?</span> ${tags}</div>
-    ${hasSteps ? `<ol class="steps">${r.steps.map((s, i) => stepHtml(s).replace('<li class="step"', `<li class="step" ${reveal ? '' : 'hidden'}`)).join('')}</ol>` : `<p class="muted">${T.noSandhi}</p>`}
-    ${r.alts.length ? `<div class="sx-alt" ${reveal ? '' : 'hidden'}>${T.alt}: <span class="skt">${esc(r.alts.join(', '))}</span></div>` : ''}
-    ${reveal ? '' : `<div class="row gap"><button class="btn small" data-act="sx-next" data-id="${id}">${T.nextStep}</button><button class="btn small ghost" data-act="sx-all" data-id="${id}">${T.showAll}</button></div>`}
-  </div>`;
-}
-
-function revealSandhi(id, all) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const steps = [...el.querySelectorAll('.step')];
-  const shown = all ? steps.length : Math.min(steps.length, +el.dataset.shown + 1);
-  steps.forEach((s, i) => { s.hidden = i >= shown; });
-  el.dataset.shown = shown;
-  if (shown >= steps.length) {
-    el.querySelector('.sx-res').hidden = false;
-    el.querySelector('.sx-qm').hidden = true;
-    const alt = el.querySelector('.sx-alt'); if (alt) alt.hidden = false;
-    el.querySelector('.row.gap')?.remove();
-  }
-}
-
-const table = (head, rows, cls = '') => `<div class="tbl-wrap"><table class="${cls}"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
-  <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-
-/** Ordered derivation: steps [{ f: form, s: sūtra id(s), n: note }]. */
-const stepsHtml = (title, steps) => `<div class="prakriya">${title ? `<h4 class="skt">${title}</h4>` : ''}<ol>${steps.map((st) =>
-  `<li><div class="pf skt">${esc(st.f)}</div><div class="step-sutras">${[].concat(st.s || []).map((s) => sutraChip(s, 'mini')).join('')}</div><div class="step-note">${esc(st.n)}</div></li>`).join('')}</ol></div>`;
-
 const prakriyaHtml = (key) => stepsHtml(PRAKRIYA[key].title, PRAKRIYA[key].steps);
 
 const shabdaHtml = (key) => {
@@ -305,6 +238,7 @@ const WIDGETS = {
   endingsTable: endingsTableHtml,
   joinClasses: joinClassesHtml,
   tinTool: (a = {}) => tinToolHtml(a),
+  ...READER_WIDGETS,
 };
 
 function renderBlock(b) {
@@ -362,6 +296,7 @@ function openSutra(id) {
   sheet.querySelector('.sheet-body').innerHTML = sutraCard(id, { full: true })
     + (lessons.length ? `<p class="muted">${T.inLesson}: ${lessons.map((l) => `<a href="#/lesson/${l.id}" data-act="close-sheet">${l.title}</a>`).join(', ')}</p>` : '')
     + kramaHtml(id)
+    + (isSwitchable(id) ? `<p><a href="#/lab/${id}" data-act="close-sheet">🧪 ${T.lab.open}</a></p>` : '')
     + (exs.length ? `<h4>${T.examples}</h4>${exs.map(([a, b, , o]) => sandhiCard(a, b, o || {}, { open: true })).join('')}` : '')
     + sweepHtml(id);
   showSheet(T.sheet.sutra);
@@ -427,9 +362,8 @@ function runQuiz(el, make, { onDone } = {}) {
 // Views
 // ============================================================================================
 
-const header = (title, sub, back) => `<header class="vh">${back ? `<a class="back" href="${back}" aria-label="${T.back}">←</a>` : ''}
-  <div><h1>${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div></header>`;
-const nextLesson = () => LESSONS.find((l) => !store.isDone(l.id));
+const pathLessons = () => lessonsInPath(store.path());
+const nextLesson = () => pathLessons().find((l) => !store.isDone(l.id));
 const bar = (frac) => `<span class="bar"><span style="width:${Math.round(frac * 100)}%"></span></span>`;
 
 let deferredInstall = null;
@@ -447,28 +381,37 @@ function homeView() {
     </div>
     ${nl ? `<a class="card next link" href="#/lesson/${nl.id}"><small class="muted">${T.continueLesson} · ${unit.title}</small>
       <div class="next-title">${nl.title}</div><p class="muted">${nl.goal}</p></a>` : `<div class="card">${T.allLessonsDone}</div>`}
+    <div class="grid2">
+      <a class="card link" href="#/map"><b>🗺 ${T.home.map[0]}</b><p class="muted small">${T.home.map[1]}</p></a>
+      <a class="card link" href="#/lab"><b>🧪 ${T.home.lab[0]}</b><p class="muted small">${T.home.lab[1]}</p></a>
+    </div>
+    ${(() => { const v = verseOfDay(); return `<a class="card link" href="#/verse/${v.id}"><small class="muted">📜 ${T.home.verseToday} · ${v.src}</small><div class="skt verse-line">${v.text.split('\n')[0]}</div></a>`; })()}
     <div class="card"><div class="row between"><b>${T.overall}</b><span>${T.lessonsDone(toDevDigits(done), toDevDigits(LESSONS.length))}</span></div>${bar(done / LESSONS.length)}</div>
     ${deferredInstall ? `<button class="btn wide" data-act="install">📲 ${T.install}</button>` : ''}
     <details class="card"><summary><b>${T.howTo}</b></summary><ol>${T.howToSteps.map((s) => `<li>${s}</li>`).join('')}</ol></details>`;
 }
 
 function lessonsView() {
-  view.innerHTML = header(T.lessonsTitle, T.lessonsSub) + UNITS.map((u) => {
+  const path = store.path(), order = pathLessons();
+  const pathChips = `<div class="card"><b>${T.paths.label}</b><div class="chips">${['lsk', 'reader'].map((k) =>
+    `<button class="chip ${k === path ? 'on' : ''}" data-act="path" data-p="${k}">${T.paths[k][0]}</button>`).join('')}</div>
+    <p class="small muted">${T.paths[path][1]}</p></div>`;
+  view.innerHTML = header(T.lessonsTitle, T.lessonsSub) + pathChips + unitsInPath(path).map((u) => {
     const ls = LESSONS.filter((l) => l.unit === u.id);
     return `<section class="unit"><div class="row between"><h2>${u.title}</h2><small>${toDevDigits(store.doneCount(ls.map((l) => l.id)))}/${toDevDigits(ls.length)}</small></div>
       <p class="sub">${u.sub}</p>
       <ol class="lesson-list">${ls.map((l) => `<li><a class="lesson-item ${store.isDone(l.id) ? 'done' : ''}" href="#/lesson/${l.id}">
-        <span class="tick">${store.isDone(l.id) ? '✓' : toDevDigits(LESSONS.indexOf(l) + 1)}</span><span>${l.title}</span></a></li>`).join('')}</ol></section>`;
+        <span class="tick">${store.isDone(l.id) ? '✓' : toDevDigits(order.indexOf(l) + 1)}</span><span>${l.title}</span></a></li>`).join('')}</ol></section>`;
   }).join('');
 }
 
 function lessonView(id) {
   const l = lessonById(id);
   if (!l) { location.hash = '#/lessons'; return; }
-  const idx = LESSONS.indexOf(l), prev = LESSONS[idx - 1], next = LESSONS[idx + 1];
+  const order = pathLessons(), idx = order.indexOf(l), prev = order[idx - 1], next = order[idx + 1];
   const unit = UNITS.find((u) => u.id === l.unit);
   const done = store.isDone(id);
-  view.innerHTML = header(l.title, `${unit.title} · ${toDevDigits(idx + 1)}/${toDevDigits(LESSONS.length)}`, '#/lessons')
+  view.innerHTML = header(l.title, `${unit.title} · ${toDevDigits(idx + 1)}/${toDevDigits(order.length)}`, '#/lessons')
     + `<div class="callout goal"><b>${T.goal}:</b> ${l.goal}</div>`
     + `<div class="lesson-body">${l.blocks.map(renderBlock).join('')}</div>`
     + `<div class="lesson-foot">
@@ -503,6 +446,11 @@ const PRACTICE = {
   rupa: () => buildQuiz(['rupa'], {}, 10),
   dhatu: () => buildQuiz(['dhatu'], {}, 10),
   tin: () => buildQuiz(['tinForm', 'angaOf', 'pratyayaVarga', 'joinSutra'], {}, 10),
+  recog: () => buildQuiz(['rupaRecognize', 'tinRecognize'], {}, 10),
+  karaka: () => buildQuiz(['karaka'], {}, 10),
+  krit: () => buildQuiz(['kritRecognize', 'kritForm'], {}, 10),
+  samasa: () => buildQuiz(['samasaType'], {}, 10),
+  verse: () => buildQuiz(['versePada'], {}, 10),
 };
 
 function practiceView() {
@@ -545,9 +493,10 @@ function reviewView() {
   draw();
 }
 
+const TOOL_HREF = { map: '#/map', lab: '#/lab', verses: '#/verses' };
 function toolsView() {
   view.innerHTML = header(T.toolsTitle) + `<div class="grid2">${Object.entries(T.tools).map(([k, [t, s]]) =>
-    `<a class="card link" href="#/tools/${k}"><b>${t}</b><p class="muted small">${s}</p></a>`).join('')}</div>`;
+    `<a class="card link" href="${TOOL_HREF[k] || `#/tools/${k}`}"><b>${t}</b><p class="muted small">${s}</p></a>`).join('')}</div>`;
 }
 
 function sandhiToolView() {
@@ -597,6 +546,14 @@ function dhatuToolView() {
 
 function tinToolView(dh, lk, pada, c) {
   view.innerHTML = header(T.tools.tin[0], T.tools.tin[1], '#/tools') + tinToolHtml({ dh, lk, pada, c });
+}
+
+function kritToolView() {
+  view.innerHTML = header(T.tools.krit[0], T.tools.krit[1], '#/tools') + kritHtml() + `<h3>${T.krit.hints[1]}</h3>` + kritHintsHtml();
+}
+
+function anubandhaToolView() {
+  view.innerHTML = header(T.tools.anubandha[0], T.tools.anubandha[1], '#/tools') + anubandhaHtml() + anubandhaTableHtml();
 }
 
 function sutraIndexView(mode) {
@@ -667,6 +624,12 @@ const ROUTES = [
   [/^#\/tools\/sutras(?:\/(krama))?$/, sutraIndexView, 'tools'],
   [/^#\/tools\/tin(?:\/(\w+)\/(\w+)\/([PA])\/([0-2][0-2]))?$/, tinToolView, 'tools'],
   [/^#\/progress$/, progressView, 'progress'],
+  [/^#\/map$/, mapView, 'tools'],
+  [/^#\/verses$/, versesView, 'lessons'],
+  [/^#\/verse\/([\w-]+)$/, (id) => verseView(id), 'lessons'],
+  [/^#\/lab(?:\/([\w.]+))?$/, (id) => labView(id), 'tools'],
+  [/^#\/tools\/krit$/, kritToolView, 'tools'],
+  [/^#\/tools\/anubandha$/, anubandhaToolView, 'tools'],
 ];
 
 function route() {
@@ -698,7 +661,9 @@ document.addEventListener('click', (e) => {
   if (s && !e.target.closest('a')) { openSutra(s.dataset.sutra); return; }
   const a = e.target.closest('[data-act]');
   if (!a) return;
+  if (onReaderClick(a)) return;
   const act = a.dataset.act;
+  if (act === 'path') { store.setPath(a.dataset.p); lessonsView(); return; }
   if (act === 'sx-next' || act === 'sx-all') revealSandhi(a.dataset.id, act === 'sx-all');
   else if (act === 'mh') onMaheshvara(a);
   else if (act === 'mh-p') { const root = a.closest('.mh'); const r = pratyaharaRange(a.dataset.p); if (r) mhShow(root, a.dataset.p, r.start, r.end); root.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }

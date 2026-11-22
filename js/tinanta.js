@@ -8,9 +8,10 @@
 //      depends only on the ending's first sound (six classes, JOIN below).
 // Every step records the sūtra(s) it uses, so the UI can show the derivation and sweep sūtras.
 
-import { parse, render, isVowel, inP } from './varna.js';
+import { parse, render, isVowel, inP, sutraNum as sutraLabel } from './varna.js';
 import { DHATUS, GANAS, dhatuById } from './content/dhatu.js';
 import { TIN } from './content/rupa.js';
+import { sandhi } from './sandhi.js';
 
 export { DHATUS, GANAS, dhatuById };
 
@@ -80,6 +81,14 @@ export function angaVarga(ph) {
 }
 
 const st = (f, s, n) => ({ f, s: [].concat(s || []), n });
+
+/** Rule lab: `off` is a Set of sūtra ids that must not fire. The derivation then takes whatever path the
+ *  remaining rules give — usually the general rule (utsarga) that the switched-off rule overrides. */
+const on = (off, id) => !off?.has(id);
+const SP_SUTRA = { adesha: '7.3.78', chh: '7.3.77', kram: '7.3.76', shamadi: '7.3.74', hali: '8.2.77', mucadi: '7.1.59', rtid: '7.1.100' };
+export const TIN_SWITCHABLE = ['7.3.84', '7.3.86', '1.1.5', '6.1.78', '6.4.77', ...Object.values(SP_SUTRA), '7.2.116',
+  '6.1.97', '6.1.101', '6.1.87', '6.1.88', '7.3.101', '6.4.71', '6.4.72', '6.1.77'];
+const offKey = (off) => (off?.size ? [...off].sort().join(',') : '');
 const R = render;
 const plus = (...parts) => parts.map((x) => (Array.isArray(x) ? R(x) : x)).join(' + ');
 
@@ -158,10 +167,19 @@ function upadeshaSteps(dh) {
   return { ph, steps };
 }
 
+/** Rule lab fallback: the aṅga rule that normally joins dhātu + vikaraṇa is off, so the general sandhi engine joins them. */
+function joinPlain(ph, vikph, steps, off, why) {
+  if (!isVowel(ph[ph.length - 1]) || !isVowel(vikph[0])) return [...ph, ...vikph];
+  const r = sandhi(R(ph), R(vikph), { internal: true, off });
+  const out = parse(r.result.replace(/ /g, ''));
+  steps.push(st(R(out), r.main, `${why} ${r.main ? 'सामान्य अच् सन्धि लाग्यो।' : 'स्वर जस्ताको तस्तै रहे।'}`));
+  return out;
+}
+
 /** Join a dhātu that ends in ए/ओ/ऐ/औ (after guṇa or as एजन्त) to the vikaraṇa's अ. */
-function withVikaranaA(a, steps, note) {
+function withVikaranaA(a, steps, note, off) {
   const x = a[a.length - 1];
-  if (AYADI[x]) {
+  if (AYADI[x] && on(off, '6.1.78')) {
     const out = [...a.slice(0, -1), ...AYADI[x], 'अ'];
     steps.push(st(R(out), '6.1.78', `${x} पछि अ — ${x} → ${R(AYADI[x])}${note ? ' ' + note : ''}`));
     return out;
@@ -171,8 +189,8 @@ function withVikaranaA(a, steps, note) {
 
 const angaCache = new Map();
 /** अङ्ग for a dhātu of the first gaṇa group: { ph, steps } (steps exclude the उपदेश steps). */
-export function buildAnga(dh, pada = dh.pada === 'A' ? 'A' : 'P') {
-  const key = `${dh.id}|${dh.g}|${dh.sp || ''}|${pada}`;
+export function buildAnga(dh, pada = dh.pada === 'A' ? 'A' : 'P', off) {
+  const key = `${dh.id}|${dh.g}|${dh.sp || ''}|${pada}|${offKey(off)}`;
   if (angaCache.has(key)) return angaCache.get(key);
   const up = upadeshaSteps(dh);
   let ph = up.ph;
@@ -186,11 +204,11 @@ export function buildAnga(dh, pada = dh.pada === 'A' ? 'A' : 'P') {
       steps.push(st(plus(ph, ['इ']), ['6.4.48', '1.1.57'], 'उपदेशमै अदन्त अङ्ग, आर्धधातुक पछि — अ लोप। लोप भएको अ स्थानिवत्, त्यसैले उपधा वृद्धि हुँदैन।'));
     } else {
       const v = angaVarga(ph);
-      if (v === 'laghu') {
+      if (v === 'laghu' && on(off, '7.3.86')) {
         const u = ph[ph.length - 2];
         ph = [...ph.slice(0, -2), ...GUNA_OF[u], ph[ph.length - 1]];
         steps.push(st(plus(ph, ['इ']), '7.3.86', `लघु इगुपध: उपधाको ${u} → गुण।`));
-      } else if (ph[ph.length - 2] === 'अ') {
+      } else if (ph[ph.length - 2] === 'अ' && on(off, '7.2.116')) {
         ph = [...ph.slice(0, -2), 'आ', ph[ph.length - 1]];
         steps.push(st(plus(ph, ['इ']), '7.2.116', 'णित् पछि उपधाको अ → वृद्धि आ।'));
       } else steps.push(st(plus(ph, ['इ']), null, 'उपधा न लघु इक् हो न अ — कुनै अङ्गकार्य छैन।'));
@@ -201,43 +219,51 @@ export function buildAnga(dh, pada = dh.pada === 'A' ? 'A' : 'P') {
     steps.push(st(plus(ph, ['अ']), ['1.3.8', '1.3.3', '1.3.9'], VIK.bhvadi.n));
     ph = [...ph.slice(0, -1), 'ए'];
     steps.push(st(plus(ph, ['अ']), ['7.3.84', '1.1.3'], 'अङ्गको अन्तिम इक् (इ) → गुण ए।'));
-    ph = withVikaranaA(ph, steps);
+    ph = withVikaranaA(ph, steps, '', off);
   } else {
     const vik = VIK[dh.g];
     steps.push(st(plus(ph, vik.name), vik.s, 'कर्तृवाच्य सार्वधातुक (तिङ्) पछि आउँदा धातु र प्रत्ययको बीचमा विकरण।'));
     steps.push(st(plus(ph, vik.ph), vik.its, vik.n));
     const v = angaVarga(ph);
-    const special = dh.sp && SPECIAL[dh.sp]?.(ph, dh, steps, vik, pada);
+    const special = dh.sp && on(off, SP_SUTRA[dh.sp]) && SPECIAL[dh.sp]?.(ph, dh, steps, vik, pada);
+    const pit = vik.pit || !on(off, '1.1.5');
+    if (!vik.pit && pit && (v === 'igant' || v === 'laghu') && !special) steps.push(st(plus(ph, vik.ph), null, '१।१।५ (क्ङिति च) बन्द: अपित् विकरण अघि पनि गुण हुन्छ।'));
     if (special) ph = special;
-    else if (vik.pit) { // शप् — गुण हुन्छ
-      if (v === 'igant') {
+    else if (pit) { // शप् — गुण हुन्छ
+      if (v === 'igant' && !on(off, '7.3.84')) {
+        ph = joinPlain(ph, vik.ph, steps, off, '७।३।८४ बन्द: गुण भएन।');
+      } else if (v === 'igant') {
         const x = ph[ph.length - 1];
         const g = [...ph.slice(0, -1), ...GUNA_OF[x]];
         steps.push(st(plus(g, ['अ']), ['7.3.84', '1.1.3', ...(x === 'ऋ' || x === 'ॠ' ? ['1.1.51'] : [])], `इगन्त: अङ्गको अन्तिम ${x} → गुण ${R(GUNA_OF[x])}।`));
-        ph = withVikaranaA(g, steps);
+        ph = withVikaranaA(g, steps, '', off);
       } else if (v === 'ejanta') {
-        ph = withVikaranaA(ph, steps, '(एजन्त)।');
-      } else if (v === 'laghu') {
+        ph = withVikaranaA(ph, steps, '(एजन्त)।', off);
+      } else if (v === 'laghu' && on(off, '7.3.86')) {
         const u = ph[ph.length - 2];
         ph = [...ph.slice(0, -2), ...GUNA_OF[u], ph[ph.length - 1]];
-        steps.push(st(R([...ph, 'अ']), '7.3.86', `लघु इगुपध: उपधाको ${u} → गुण ${R(GUNA_OF[u])}।`));
-        ph = [...ph, 'अ'];
-      } else if (v === 'akaranta') {
+        steps.push(st(R([...ph, ...vik.ph]), '7.3.86', `लघु इगुपध: उपधाको ${u} → गुण ${R(GUNA_OF[u])}।`));
+        ph = [...ph, ...vik.ph];
+      } else if (v === 'akaranta' && on(off, '6.1.101')) {
         steps.push(st(R(ph), '6.1.101', 'आकारान्त: अङ्गकार्य छैन; आ + अ = आ (सवर्ण दीर्घ)।'));
+      } else if (off?.size && isVowel(ph[ph.length - 1])) {
+        ph = joinPlain(ph, vik.ph, steps, off, 'अङ्गकार्यको सूत्र बन्द।');
       } else {
-        ph = [...ph, 'अ'];
+        ph = [...ph, ...vik.ph];
         steps.push(st(R(ph), null, 'न इगन्त, न एजन्त, न लघु इगुपध — कुनै अङ्गकार्य छैन। सिधै जोड्ने।'));
       }
     } else { // श्यन्, श — अपित्, ङिद्वत्
       if (v === 'igant' || v === 'laghu') steps.push(st(plus(ph, vik.ph), ['1.2.4', '1.1.5'], 'अपित् सार्वधातुक ङिद्वत् — गुण हुँदैन।'));
       const x = ph[ph.length - 1];
-      if (vik.ph[0] === 'अ' && IK.includes(x) && x !== 'ऋ' && x !== 'ॠ') {
+      if (vik.ph[0] === 'अ' && IK.includes(x) && x !== 'ऋ' && x !== 'ॠ' && on(off, '6.4.77')) {
         ph = [...ph.slice(0, -1), ...({ 'इ': ['इ', 'य'], 'ई': ['इ', 'य'], 'उ': ['उ', 'व'], 'ऊ': ['उ', 'व'] }[x]), 'अ'];
         steps.push(st(R(ph), '6.4.77', `अजादि प्रत्यय पछि धातुको ${x} → ${x === 'उ' || x === 'ऊ' ? 'उव्' : 'इय्'}।`));
       } else if (vik.ph[0] === 'अ' && AYADI[x]) {
-        ph = withVikaranaA(ph, steps, '(एजन्त)।');
-      } else if (vik.ph[0] === 'अ' && v === 'akaranta') {
+        ph = withVikaranaA(ph, steps, '(एजन्त)।', off);
+      } else if (vik.ph[0] === 'अ' && v === 'akaranta' && on(off, '6.1.101')) {
         steps.push(st(R(ph), '6.1.101', 'आ + अ = आ (सवर्ण दीर्घ)।'));
+      } else if (off?.size && isVowel(x) && isVowel(vik.ph[0])) {
+        ph = joinPlain(ph, vik.ph, steps, off, 'अङ्गकार्यको सूत्र बन्द।');
       } else {
         ph = [...ph, ...vik.ph];
         if (v !== 'igant' && v !== 'laghu') steps.push(st(R(ph), null, 'कुनै अङ्गकार्य छैन — सिधै जोड्ने।'));
@@ -254,10 +280,10 @@ const PADA_SUTRA = (dh) => (dh.pada === 'P' ? '1.3.78' : dh.pada === 'A' ? '1.3.
 const PADA_NOTE = { P: 'परस्मैपदी — आत्मनेपदको कारण छैन।', A: 'आत्मनेपदी — अनुदात्त स्वर वा ङ् इत् भएको।', U: 'उभयपदी — फल कर्तालाई: आत्मनेपद, अरूलाई: परस्मैपद।' };
 
 /** One form with its full derivation. → { form, alts, steps } */
-export function derive(dhId, lk, pada, p, n) {
+export function derive(dhId, lk, pada, p, n, off) {
   const dh = typeof dhId === 'string' ? dhatuById(dhId) : dhId;
   const L = LAKARAS.find((x) => x.key === lk);
-  const A = buildAnga(dh, pada);
+  const A = buildAnga(dh, pada, off);
   const tin = (pada === 'P' ? TIN.parasmai : TIN.atmane)[p][n];
   const head = [
     ...A.pre,
@@ -265,20 +291,20 @@ export function derive(dhId, lk, pada, p, n) {
     st(`${A.dhatu} + ${L.name} → ${A.dhatu} + ${tin}`, [L.s, '3.4.78'], `${L.use} — ${L.name}; त्यसको ठाउँमा तिङ् ${tin}। तिङ् सार्वधातुक (३।४।११३), त्यसैले विकरण आउँछ।`),
     ...A.steps,
   ];
-  const results = ENDINGS[lk][pada][p][n].split('|').map((e) => finish(A.ph, e, lk, tin));
+  const results = ENDINGS[lk][pada][p][n].split('|').map((e) => finish(A.ph, e, lk, tin, off));
   return { form: results[0].form, alts: results.slice(1).map((r) => r.form), steps: [...head, ...results[0].steps], altSteps: results.slice(1).map((r) => r.steps), anga: A.angaStr };
 }
 
-function finish(anga, e, lk, tin) {
+function finish(anga, e, lk, tin, off) {
   const steps = [];
   let a = anga.slice();
   if (lk === 'lan') {
-    if (isVowel(a[0])) {
+    if (isVowel(a[0]) && on(off, '6.4.72')) {
       const v = VRDDHI_AT[a[0]];
       steps.push(st(plus(['आ'], a), '6.4.72', 'अजादि अङ्ग — लङ् मा आट् आगम (सुरुमा)।'));
       a = [...v, ...a.slice(1)];
       steps.push(st(R(a), '6.1.90', `आट् + ${anga[0]} → वृद्धि ${R(v)}।`));
-    } else {
+    } else if (!isVowel(a[0]) && on(off, '6.4.71')) {
       a = ['अ', ...a];
       steps.push(st(R(a), '6.4.71', 'लङ् मा अङ्गलाई अट् (अ) आगम — सुरुमा।'));
     }
@@ -287,6 +313,18 @@ function finish(anga, e, lk, tin) {
   steps.push(st(plus(a, e || '(लोप)'), null, `${tin} को प्रथम गणसमूहको तयार प्रत्यय: ${e || 'लोप'}${e === 'तात्' ? ' (तातङ्, विकल्पले — ७।१।३५)' : ''}।`));
   const jc = joinClass(e), J = JOIN[jc];
   let out;
+  if (J.s && !on(off, J.s)) { // rule lab: the join rule is off — let the general sandhi engine join instead
+    const E0 = E[0], A1 = a[a.length - 1];
+    if (E0 && isVowel(E0) && isVowel(A1)) {
+      const r = sandhi(R(a), e, { internal: true, off });
+      out = parse(r.result.replace(/ /g, ''));
+      steps.push(st(R(out), r.main, `${sutraLabel(J.s)} बन्द: ${r.main ? 'सामान्य नियम लाग्यो।' : 'कुनै नियम लागेन।'}`));
+    } else {
+      out = [...a, ...E];
+      steps.push(st(R(out), null, `${sutraLabel(J.s)} बन्द: सिधै जोडियो।`));
+    }
+    return { form: R(out), steps };
+  }
   if (jc === 'pararupa') out = [...a.slice(0, -1), ...E];
   else if (jc === 'dirgha') out = [...a.slice(0, -1), ...E];
   else if (jc === 'vrddhi') out = [...a.slice(0, -1), 'ऐ', ...E.slice(1)];
