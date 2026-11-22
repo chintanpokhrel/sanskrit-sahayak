@@ -304,3 +304,130 @@ table.ends td { white-space: nowrap; }
   z-index: 20; max-width: calc(100% - 32px); box-shadow: var(--shadow);
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* ============================================================================================
+   Reader features: rewrite signature, map, verse reader, kāraka/samāsa/kṛdanta widgets, lab
+   ============================================================================================ */
+:root {
+  --st-samjna: #00796b; --st-karaka: #1f5fa8; --st-dhatu: #c8641e; --st-prati: #a35f00;
+  --st-samasa: #7b3fa0; --st-anga: #b3261e; --st-sandhi: #2e7d32;
+  --k-karta: #1f5fa8; --k-karma: #c0392b; --k-karana: #a35f00; --k-sampradana: #7b3fa0; --k-apadana: #00796b;
+  --k-adhikarana: #2e7d32; --k-kriya: #8a2b2b; --k-vidheya: #4b6fa8; --k-sambandha: #6d5c48; --k-sambodhana: #c8641e;
+  --k-upapada: #9c4f8f; --k-visheshana: #5f7f3a; --k-avyaya: #8a7c6c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --st-samjna: #5cc4b5; --st-karaka: #7fb2f0; --st-dhatu: #f0a35e; --st-prati: #e3a857;
+    --st-samasa: #c79ae6; --st-anga: #f08a80; --st-sandhi: #7cc47f;
+    --k-karta: #7fb2f0; --k-karma: #f08a80; --k-karana: #e3a857; --k-sampradana: #c79ae6; --k-apadana: #5cc4b5;
+    --k-adhikarana: #7cc47f; --k-kriya: #e0826b; --k-vidheya: #9fb8e6; --k-sambandha: #c9b79f; --k-sambodhana: #f0a35e;
+    --k-upapada: #dba2d2; --k-visheshana: #b5d18f; --k-avyaya: #a89a8a;
+  }
+}
+.st-samjna { --sc: var(--st-samjna); } .st-karaka { --sc: var(--st-karaka); } .st-dhatu { --sc: var(--st-dhatu); }
+.st-prati { --sc: var(--st-prati); } .st-samasa { --sc: var(--st-samasa); } .st-anga { --sc: var(--st-anga); } .st-sandhi { --sc: var(--st-sandhi); }
+.k-karta { --kc: var(--k-karta); } .k-karma { --kc: var(--k-karma); } .k-karana { --kc: var(--k-karana); } .k-sampradana { --kc: var(--k-sampradana); }
+.k-apadana { --kc: var(--k-apadana); } .k-adhikarana { --kc: var(--k-adhikarana); } .k-kriya { --kc: var(--k-kriya); } .k-vidheya { --kc: var(--k-vidheya); }
+.k-sambandha { --kc: var(--k-sambandha); } .k-sambodhana { --kc: var(--k-sambodhana); } .k-upapada { --kc: var(--k-upapada); }
+.k-visheshana { --kc: var(--k-visheshana); } .k-avyaya { --kc: var(--k-avyaya); }
+
+/* rewrite signature on sūtra cards */
+.sig { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 4px 0; font-size: .9em; }
+.sig > span { color: var(--muted); font-size: .85em; }
+.sig code { background: var(--bg); border: 1px dashed var(--line); border-radius: 6px; padding: 1px 8px; font-size: 1.05em; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .88em; }
+
+.linkbtn { appearance: none; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
+.check { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: .95em; }
+.tabs { position: sticky; top: 0; background: var(--bg); padding: 6px 0; z-index: 2; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; font-size: .8em; }
+.leg { border-left: 4px solid var(--sc); padding: 0 8px; background: var(--card); border-radius: 4px; }
+.map-panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+
+/* zoom levels */
+.levels { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.levels li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.lv-n { font-family: ui-monospace, Consolas, monospace; font-weight: 700; color: var(--accent-2); }
+
+/* pipeline */
+.pipe { display: grid; gap: 4px; justify-items: center; }
+.pipe-end { font-weight: 700; color: var(--muted); }
+.pipe-arrow { color: var(--muted); line-height: 1; }
+.stage { appearance: none; width: 100%; max-width: 460px; text-align: left; font: inherit; cursor: pointer; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--sc); border-radius: 12px; padding: 8px 12px; display: grid; }
+.stage small { color: var(--muted); }
+.stage.on { outline: 3px solid var(--sc); }
+.pipe-side { width: 100%; max-width: 460px; display: grid; gap: 2px; margin-top: 8px; }
+
+/* 8 × 4 grid */
+.grid8 { display: grid; gap: 4px; }
+.g-row { display: grid; grid-template-columns: 22px repeat(4, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.g-a { color: var(--muted); font-size: .85em; align-self: center; }
+.g-cell { appearance: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left; position: relative; min-height: 46px; min-width: 0;
+  background: color-mix(in srgb, var(--sc) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--sc) 45%, var(--line)); border-radius: 8px; padding: 4px 6px; }
+.g-cell b { font-size: .85em; }
+.g-n { position: absolute; right: 5px; top: 3px; font-size: .72em; background: var(--sc); color: #fff; border-radius: 99px; padding: 0 6px; }
+.g-label { display: none; font-size: .72em; line-height: 1.35; color: var(--muted); }
+.g-cell.dim { opacity: .28; }
+.g-cell.sel { outline: 3px solid var(--sc); }
+@media (min-width: 640px) { .g-label { display: block; } .g-cell { min-height: 92px; } }
+
+.scopes { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.scopes li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; border-bottom: 1px solid var(--line); padding: 4px 0; }
+.ideas { display: grid; gap: 10px; }
+.idea { margin: 0; }
+.idea p { margin: 4px 0; }
+table.codemap code { white-space: nowrap; }
+
+/* anubandha decoder, word detail */
+.anu-out { margin-top: 4px; }
+.anu-out dl, .wd dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; }
+.anu-out dt, .wd dt { color: var(--muted); font-size: .9em; }
+.anu-out dd, .wd dd { margin: 0; min-width: 0; }
+.tagchip { display: inline-block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; margin: 2px 4px 2px 0; }
+.fx { margin: 0; padding-left: 1.1em; }
+
+/* verse reader */
+.verse-item .skt { font-size: 1.05em; }
+.verse-line { font-size: 1.15rem; color: var(--accent); margin-top: 2px; }
+.pcd { font-size: 1.15rem; line-height: 2; }
+.artha-big { font-size: 1.1rem; }
+.rchip { display: inline-block; border-radius: 999px; padding: 0 10px; font-size: .85em; color: #fff; background: var(--kc, var(--muted)); }
+@media (prefers-color-scheme: dark) { .rchip { color: #1b1612; } }
+.anv { line-height: 2.6; }
+.aw { appearance: none; font: inherit; color: var(--ink); cursor: pointer; display: inline-flex; flex-direction: column; align-items: center; vertical-align: top;
+  background: var(--card); border: 1px solid var(--line); border-bottom: 4px solid var(--kc, var(--line)); border-radius: 8px; padding: 2px 8px; margin: 2px; line-height: 1.4; }
+.aw .skt { font-size: 1.12em; }
+.aw small { font-size: .7em; color: var(--kc, var(--muted)); font-weight: 700; }
+.aw.implied { border-style: dashed; opacity: .8; cursor: default; }
+.aw.sel { outline: 3px solid var(--accent-2); }
+.kp-sent { line-height: 2.4; }
+.hl { color: var(--accent); text-decoration: underline; }
+
+/* kṛdanta table, lab */
+table.krit td { vertical-align: middle; }
+table.krit thead { display: none; }
+.labrows { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.labrow { appearance: none; width: 100%; font: inherit; color: var(--ink); cursor: pointer; text-align: left; display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.labrow .skt { font-size: 1.05em; }
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diff > div { min-width: 0; }
+@media (max-width: 560px) { .diff { grid-template-columns: 1fr; } .labrow { grid-template-columns: 1fr auto; } .labrow > small { display: none; } }
+
+/* print: the map (and any page) prints without app chrome */
+@media print {
+  :root { --bg: #fff; --card: #fff; --ink: #000; --muted: #444; --line: #bbb; --shadow: none; }
+  body { background: #fff; font-size: 11pt; }
+  .tabbar, #toast, #sheet, .noprint, .vh .back, .btn { display: none !important; }
+  main { max-width: none; padding: 0; }
+  .card, .sutra, .prakriya, .tbl-wrap, .map-panel, .g-row, .levels li, .scopes li { box-shadow: none; break-inside: avoid; }
+  .map-panel { display: none !important; }
+  .g-label { display: block !important; }
+  .g-cell { min-height: 0; }
+  .g-cell.dim { opacity: 1; }
+  .pb { break-before: page; }
+  a { color: inherit; text-decoration: none; }
+  .tbl-wrap { overflow: visible; }
+}
+.verse-foot { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 16px; }

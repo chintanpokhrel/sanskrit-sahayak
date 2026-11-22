@@ -1,12 +1,13 @@
 // Service worker: precache the app shell, cache-first; Google Fonts cached at runtime.
 // Bump VERSION on every deploy so clients pick up new files.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `sahayak-${VERSION}`;
 const FONTS = 'sahayak-fonts';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
-  './js/app.js', './js/i18n.js', './js/varna.js', './js/sandhi.js', './js/quiz.js', './js/store.js', './js/tinanta.js', './js/sweep.js',
-  './js/content/sutras.js', './js/content/lessons.js', './js/content/rupa.js', './js/content/dhatu.js',
+  './js/app.js', './js/i18n.js', './js/varna.js', './js/sandhi.js', './js/quiz.js', './js/store.js', './js/tinanta.js', './js/sweep.js', './js/ui.js', './js/reader.js',
+  './js/content/sutras.js', './js/content/lessons.js', './js/content/rupa.js', './js/content/dhatu.js', './js/content/verses.js', './js/content/karaka.js', './js/content/samasa.js',
+  './js/content/krit.js', './js/content/anubandha.js', './js/content/map.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
 ];
 

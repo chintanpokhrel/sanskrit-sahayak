@@ -62,6 +62,82 @@ try {
     if (got !== e) bad(`tinanta भू ${lk} [${p},${n}] = ${got} (rupa.js has ${e})`);
   }));
   for (const id of tinSweep().keys()) need(id, 'tinanta engine');
+
+  // ---- reader content: verses, kāraka, samāsa, kṛdanta, anubandha, map ----
+  const { VERSES } = await import('../js/content/verses.js');
+  const { ROLE, SENTENCES, PICK_ROLES } = await import('../js/content/karaka.js');
+  const { SAMASA_TYPES, SAMASAS } = await import('../js/content/samasa.js');
+  const { KRT, KRT_KEYS, KRIT_FORMS } = await import('../js/content/krit.js');
+  const { TAGS, PRATYAYAS } = await import('../js/content/anubandha.js');
+  const { STAGES, PIPELINE, PADAS, IDEAS, CODE_MAP } = await import('../js/content/map.js');
+  const { ADHIKARAS, sutraKey } = await import('../js/content/sutras.js');
+  const { UNITS, PATHS } = await import('../js/content/lessons.js');
+  const { LAKARA } = await import('../js/content/rupa.js');
+  const roleOk = (r, where) => { if (!ROLE[r]) bad(`unknown role ${r} (${where})`); };
+  for (const r of Object.values(ROLE)) { need(r.s, 'karaka role'); need(r.vs, 'karaka role'); }
+  PICK_ROLES.forEach((r) => roleOk(r, 'PICK_ROLES'));
+  for (const v of VERSES) {
+    for (const [a, b, e, st] of v.joins) {
+      if (st) { st.s.forEach((id) => need(id, `verse ${v.id} static join`)); continue; }
+      const r = sandhi(a, b);
+      if (!r.ok || r.result !== e) bad(`verse ${v.id}: ${a} + ${b} = ${r.ok ? r.result : r.reason} (expected ${e})`);
+    }
+    v.words.forEach((w, i) => {
+      const where = `verse ${v.id} [${i}] ${w.w}`;
+      (w.s || []).forEach((id) => need(id, where));
+      roleOk(w.r, where);
+      if (w.t === 'sup' && !(w.v >= 0 && w.v <= 7 && w.n >= 0 && w.n <= 2)) bad(`${where}: sup needs v (0–7) and n (0–2)`);
+      if (w.t === 'tin' && !(LAKARA.some((l) => l.key === w.lk) && w.p >= 0 && w.p <= 2 && w.n >= 0 && w.n <= 2)) bad(`${where}: tin needs lk, p, n`);
+      if (w.dh) {
+        const f = (w.pre || '') + derive(w.dh, w.lk, w.pada, w.p, w.n).form;
+        if (f !== w.w) bad(`${where}: engine gives ${f}`);
+      }
+    });
+    const used = new Set();
+    for (const s of v.anvaya) for (const x of s) {
+      if (typeof x === 'number') { if (!v.words[x]) bad(`verse ${v.id}: anvaya index ${x}`); used.add(x); } else roleOk(x.r, `verse ${v.id} anvaya`);
+    }
+    v.words.forEach((w, i) => { if (!used.has(i)) bad(`verse ${v.id}: word ${i} (${w.w}) missing from anvaya`); });
+  }
+  for (const S of SENTENCES) for (const w of S.ws) roleOk(w.r, `sentence ${S.m}`);
+  for (const x of SAMASAS) { if (!SAMASA_TYPES[x.ty]) bad(`samāsa ${x.sam}: type ${x.ty}`); x.s.forEach((id) => need(id, `samāsa ${x.sam}`)); }
+  Object.values(SAMASA_TYPES).forEach((t) => need(t.s, 'samāsa type'));
+  KRT.forEach((k) => k.s.forEach((id) => need(id, `kṛt ${k.p}`)));
+  for (const F of KRIT_FORMS) {
+    KRT_KEYS.forEach((k) => { if (!F.f[k]) bad(`kṛdanta ${F.d}: no ${k}`); });
+    F.s.forEach((id) => need(id, `kṛdanta ${F.d}`));
+  }
+  for (const [l, t] of Object.entries(TAGS)) { t.it.forEach((id) => need(id, `tag ${l}`)); t.fx.forEach(([, id]) => id && need(id, `tag ${l}`)); }
+  for (const P of PRATYAYAS) P.tags.forEach((l) => { if (!TAGS[l]) bad(`pratyaya ${P.up}: unknown tag ${l}`); });
+  if (PADAS.length !== 32 || new Set(PADAS.map((x) => x[0])).size !== 32) bad('map: PADAS must list 32 distinct pādas');
+  PADAS.forEach(([p, st]) => { if (!STAGES[st]) bad(`map: pāda ${p} stage ${st}`); });
+  PIPELINE.forEach((st) => { if (!STAGES[st]) bad(`map: pipeline stage ${st}`); });
+  IDEAS.forEach((x) => x.s.forEach((id) => need(id, `idea ${x.t}`)));
+  CODE_MAP.forEach(([p, , , id]) => id && need(id, `code map ${p}`));
+  ADHIKARAS.forEach((a) => { if (sutraKey(a.from) > sutraKey(a.to)) bad(`adhikāra ${a.t}: from > to`); });
+  for (const [k, units] of Object.entries(PATHS)) {
+    if (units.length !== UNITS.length || UNITS.some((u) => !units.includes(u.id))) bad(`path ${k} must list every unit once`);
+  }
+  // Lesson widgets must exist: reader widgets are importable; app.js widget names are read from its source.
+  const { READER_WIDGETS, runLab } = await import('../js/reader.js');
+  const { readFileSync } = await import('node:fs');
+  const appSrc = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const appWidgets = new Set([...appSrc.slice(appSrc.indexOf('const WIDGETS = {')).split('\n};')[0].matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]));
+  for (const l of LESSONS) for (const b of l.blocks) if (b.t === 'widget' && !READER_WIDGETS[b.name] && !appWidgets.has(b.name)) bad(`lesson ${l.id}: unknown widget ${b.name}`);
+
+  // ---- quiz generators and the rule lab ----
+  const { buildQuiz } = await import('../js/quiz.js');
+  for (const g of ['rupaRecognize', 'tinRecognize', 'kritForm', 'kritRecognize', 'samasaType', 'karaka', 'versePada']) {
+    const qs = buildQuiz([g], {}, 6);
+    if (qs.length < 5) bad(`quiz ${g}: only ${qs.length} questions`);
+    qs.forEach((q) => { if (q.answer < 0 || new Set(q.options).size !== q.options.length) bad(`quiz ${g}: bad options ${q.options}`); });
+  }
+  const none = runLab(new Set());
+  if (none.sandhi.changed.length || none.tin.changed.length) bad('lab: no sūtra off, yet forms changed');
+  const pr = runLab(new Set(['6.1.97']));
+  if (!pr.tin.changed.some((x) => x.form === 'भवन्ति' && x.after === 'भवान्ति')) bad('lab: अतो गुणे off should give भवान्ति');
+  const { rewriteSig } = await import('../js/ui.js');
+  if (!rewriteSig(SUTRAS['6.1.77'])) bad('rewriteSig(6.1.77) is empty');
 } catch (e) {
   if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
   console.log('(content modules not present yet — skipped)');

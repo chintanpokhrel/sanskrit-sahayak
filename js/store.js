@@ -7,7 +7,7 @@ const DAY = 86400000;
 const INTERVAL_DAYS = [0, 1, 3, 7, 16, 35];
 const MAX_BOX = INTERVAL_DAYS.length - 1;
 
-const empty = () => ({ v: 1, lessons: {}, quiz: {}, srs: {}, days: [] });
+const empty = () => ({ v: 1, lessons: {}, quiz: {}, srs: {}, days: [], path: 'lsk' });
 
 function load() {
   try {
@@ -29,6 +29,10 @@ function markActive() {
 }
 
 export const store = {
+  /** Lesson order: 'lsk' (कौमुदी क्रम) or 'reader' (पाठक क्रम). */
+  path: () => state.path || 'lsk',
+  setPath(p) { state.path = p; save(); },
+
   isDone: (id) => !!state.lessons[id],
   doneCount: (ids) => ids.filter((id) => state.lessons[id]).length,
 

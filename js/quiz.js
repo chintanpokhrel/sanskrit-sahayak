@@ -7,6 +7,12 @@ import { SUTRAS, ROLES } from './content/sutras.js';
 import { LESSONS } from './content/lessons.js';
 import { SHABDA, DHATU, VIBHAKTI, VACANA, PURUSHA, LAKARA } from './content/rupa.js';
 import { DHATUS, GANAS, LAKARAS, PADA, ENDINGS, JOIN, joinClass, endingVarga, vargaName, buildAnga, derive, padasOf } from './tinanta.js';
+import { T } from './i18n.js';
+import { supLabel, tinLabel } from './ui.js';
+import { VERSES } from './content/verses.js';
+import { ROLE, PICK_ROLES, SENTENCES } from './content/karaka.js';
+import { SAMASA_TYPES, SAMASAS } from './content/samasa.js';
+import { KRT, KRIT_FORMS } from './content/krit.js';
 
 const rand = (n) => Math.floor(Math.random() * n);
 const pick = (arr) => arr[rand(arr.length)];
@@ -183,6 +189,92 @@ const GEN = {
       ids.filter((x) => x !== JOIN[j].s).map((x) => SUTRAS[x].t), `${sref(JOIN[j].s)} — ${JOIN[j].n}`);
   },
 };
+
+/**
+ * Guess-first question for one analysed pada (verse reader and the श्लोक practice set).
+ * The word's other readings (alt) are never offered as wrong answers.
+ */
+export function wordQuestion(w) {
+  if (w.t === 'sup') {
+    const right = supLabel(w.v, w.n), ok = new Set([right, ...(w.alt || []).map(([v, n]) => supLabel(v, n))]);
+    const pool = shuffle([0, 1, 2, 3, 4, 5, 6, 7].flatMap((v) => [0, 1, 2].map((n) => supLabel(v, n))).filter((x) => !ok.has(x)));
+    const near = pool.filter((x) => x.endsWith(VACANA[w.n])).slice(0, 2);
+    return { q: T.verse.askSup(w.w), opts: shuffle([right, ...near, ...pool.filter((x) => !near.includes(x)).slice(0, 3 - near.length)]), right };
+  }
+  if (w.t === 'tin') {
+    const right = tinLabel(w);
+    const same = [], pool = [];
+    // One distractor in the same lakāra (other person/number) and two in other lakāras, so the lakāra alone never
+    // gives the answer away.
+    for (const L of LAKARA.filter((x) => x.key !== 'let')) for (let p = 0; p < 3; p++) for (let n = 0; n < 3; n++) {
+      const x = tinLabel({ ...w, lk: L.key, p, n });
+      if (x !== right) (L.key === w.lk ? same : pool).push(x);
+    }
+    const otherLak = shuffle(pool).filter((x, i, a) => a.findIndex((y) => y.split(',')[0] === x.split(',')[0]) === i);
+    return { q: T.verse.askTin(w.w), opts: shuffle([right, ...shuffle(same).slice(0, 1), ...otherLak.slice(0, 2)]), right };
+  }
+  return null;
+}
+
+const krtPick = () => {
+  const F = pick(KRIT_FORMS), K = pick(KRT.filter((k) => F.f[k.key] !== '—'));
+  return { F, K, form: F.f[K.key].split(' / ')[0] };
+};
+
+Object.assign(GEN, {
+  // ---- पढ्नका लागि: रूप देखेर चिन्ने ----
+  rupaRecognize() {
+    const sh = SHABDA[pick(Object.keys(SHABDA))], v = rand(8), n = rand(3), form = sh.forms[v][n];
+    const ok = new Set();
+    sh.forms.forEach((r, vi) => r.forEach((f, ni) => { if (f === form) ok.add(supLabel(vi, ni)); }));
+    const right = supLabel(v, n);
+    const rest = [0, 1, 2, 3, 4, 5, 6, 7].flatMap((vi) => [0, 1, 2].map((ni) => supLabel(vi, ni))).filter((x) => !ok.has(x));
+    return mcq('recog', T.q.supWhich(form, `${sh.name}, ${sh.desc}`), right, [...shuffle(rest.filter((x) => x.endsWith(VACANA[n]))).slice(0, 2), ...shuffle(rest)],
+      `<span class="skt">${form}</span> = ${[...ok].join(' / ')}`);
+  },
+  tinRecognize() {
+    const dh = pick(DHATUS), L = pick(LAKARAS), pada = pick(padasOf(dh)), p = rand(3), n = rand(3);
+    const r = derive(dh, L.key, pada, p, n);
+    const label = (lk, pp, nn) => tinLabel({ lk, p: pp, n: nn });
+    const ok = new Set(), rest = [];
+    for (const X of LAKARAS) for (let pp = 0; pp < 3; pp++) for (let nn = 0; nn < 3; nn++) {
+      const x = derive(dh, X.key, pada, pp, nn), l = label(X.key, pp, nn);
+      if (x.form === r.form || x.alts.includes(r.form)) ok.add(l); else rest.push(l);
+    }
+    const sameLak = rest.filter((x) => x.startsWith(label(L.key, 0, 0).split(',')[0] + ','));
+    return mcq('recog', T.q.tinWhich(r.form, `${dh.u} ${dh.a}`), label(L.key, p, n), [...shuffle(sameLak).slice(0, 1), ...shuffle(rest)],
+      `<span class="skt">${r.form}</span> = ${[...ok].join(' / ')} · ${PADA[pada]}`);
+  },
+  // ---- कृदन्त ----
+  kritForm() {
+    const { F, K, form } = krtPick();
+    const others = [...KRT.filter((k) => k !== K).map((k) => F.f[k.key]), ...KRIT_FORMS.filter((f) => f !== F).map((f) => f.f[K.key])]
+      .filter((x) => x && x !== '—').map((x) => x.split(' / ')[0]);
+    return mcq('krit', T.q.kritForm(F.d, F.ne, K.p), form, shuffle(others), `${K.p}: ${K.use}${F.n ? `<br>${F.n}` : ''}`);
+  },
+  kritRecognize() {
+    const { F, K, form } = krtPick();
+    return mcq('krit', T.q.kritWhich(form, F.d), K.p, KRT.filter((k) => k !== K && F.f[k.key].split(' / ')[0] !== form).map((k) => k.p), `${K.p}: ${K.use}`);
+  },
+  // ---- समास, कारक, श्लोक ----
+  samasaType() {
+    const x = pick(SAMASAS);
+    return mcq('samasa', T.q.samasaWhich(x.sam), SAMASA_TYPES[x.ty].name, Object.values(SAMASA_TYPES).map((t) => t.name),
+      `<span class="skt">${x.vig}</span> — ${x.m}${x.sub ? ` (${x.sub})` : ''}`);
+  },
+  karaka() {
+    const S = pick(SENTENCES), w = pick(S.ws.filter((x) => x.r !== 'kriya'));
+    const sent = S.ws.map((x) => (x === w ? `<b class="hl">${x.t}</b>` : x.t)).join(' ');
+    return mcq('karaka', T.q.karakaWhich(sent, w.t, S.m), ROLE[w.r].name, PICK_ROLES.filter((r) => r !== w.r).map((r) => ROLE[r].name),
+      `${ROLE[w.r].n}${w.x ? ` ${w.x}` : ''}`);
+  },
+  versePada() {
+    const v = pick(VERSES), w = pick(v.words.filter((x) => x.t !== 'avy'));
+    const q = wordQuestion(w);
+    return { topic: 'verse', prompt: T.q.verseWhich(v.title, q.q), options: q.opts, answer: q.opts.indexOf(q.right),
+      explain: `<a href="#/verse/${v.id}">${v.title}</a>: ${w.m}${w.x ? `<br>${w.x}` : ''}` };
+  },
+});
 
 /** Build up to n questions cycling through the generator names. */
 export function buildQuiz(gens, ctx, n = 6) {
