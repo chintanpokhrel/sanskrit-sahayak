@@ -17,7 +17,7 @@ import { KRT, KRIT_FORMS } from './content/krit.js';
 import { TAGS, PRATYAYAS } from './content/anubandha.js';
 import { store } from './store.js';
 import { shuffle, wordQuestion } from './quiz.js';
-import { esc, sutraChip, table, stepsHtml, sandhiCard, sandhiStepsHtml, header, supLabel, tinLabel, lakName } from './ui.js';
+import { esc, sutraChip, table, stepsHtml, sandhiCard, sandhiStepsHtml, header, supLabel, tinLabel, lakName, glossify } from './ui.js';
 
 const view = () => document.getElementById('view');
 const D = toDevDigits;
@@ -68,7 +68,7 @@ function scopesHtml() {
     <button class="chip small noprint" data-act="map-scope" data-i="${i}">${T.map.showOnGrid}</button></li>`).join('')}</ul>`;
 }
 
-const ideasHtml = () => `<div class="ideas">${IDEAS.map((x, i) => `<div class="card idea"><b>${D(i + 1)}. ${x.t}</b><p>${x.h}</p>
+const ideasHtml = () => `<div class="ideas">${IDEAS.map((x, i) => `<div class="card idea"><b>${D(i + 1)}. ${x.t}</b><p>${glossify(x.h)}</p>
   <div class="row wrap">${chips(x.s)}${x.link.startsWith('#/') ? `<a class="small noprint" href="${x.link}">${T.map.open}</a>`
     : `<button class="linkbtn small noprint" data-act="scroll" data-to="${x.link.slice(1)}">${T.map.open}</button>`}</div></div>`).join('')}</div>`;
 
@@ -119,7 +119,7 @@ export function anubandhaHtml(sel = 'शप्') {
       <dt>${T.anubandha.rem}</dt><dd class="skt">${P.rem}</dd>
       <dt>${T.anubandha.fx}</dt><dd><ul class="fx">${fx}</ul></dd>
       <dt>${T.anubandha.ex}</dt><dd class="skt">${P.ex}</dd></dl>
-      ${P.x ? `<p class="small muted">${P.x}</p>` : ''}</div></div>`;
+      ${P.x ? `<p class="small muted">${glossify(P.x)}</p>` : ''}</div></div>`;
 }
 
 export function mapView() {
@@ -156,7 +156,7 @@ function wordDetail(w) {
       <dt>${T.verse.role}</dt><dd>${roleChip(w.r)} ${R?.s ? sutraChip(R.s, 'mini') : ''}${R?.vs ? sutraChip(R.vs, 'mini') : ''}</dd>
       <dt>${T.verse.meaning}</dt><dd>${esc(w.m)}</dd>
     </dl>
-    ${w.x ? `<p class="small">${esc(w.x)}</p>` : ''}
+    ${w.x ? `<p class="small">${glossify(esc(w.x))}</p>` : ''}
     ${w.s?.length ? `<div class="chips">${chips(w.s)}</div>` : ''}${link}</div>`;
 }
 
@@ -197,7 +197,7 @@ export function verseView(id, tab = 'join') {
         <div class="chips">${v.words.map((w, k) => `<button class="chip skt" data-act="vw" data-i="${k}">${esc(w.w)}</button>`).join('')}</div></div>`
     + `<div class="vpane" data-pane="anvaya" ${tab === 'anvaya' ? '' : 'hidden'}>${anvayaHtml(v)}</div>`
     + `<div class="vpane" data-pane="artha" ${tab === 'artha' ? '' : 'hidden'}><p class="artha-big">${v.artha}</p>
-        <h4>${T.verse.learn}</h4><ul>${v.learn.map((x) => `<li>${x}</li>`).join('')}</ul></div>`
+        <h4>${T.verse.learn}</h4><ul>${v.learn.map((x) => `<li>${glossify(x)}</li>`).join('')}</ul></div>`
     + `<div id="vdetail" data-verse="${v.id}"><p class="small muted">${T.verse.pickWord}</p></div>`
     + `<div class="row between verse-foot">${prev ? `<a href="#/verse/${prev.id}">${T.verse.prev}</a>` : '<span></span>'}${next ? `<a href="#/verse/${next.id}">${T.verse.next}</a>` : ''}</div>`;
   showDetailFor(tab);
@@ -254,7 +254,7 @@ export function karakaPickHtml(i = 0, all = false) {
 function karakaExplain(w) {
   const R = ROLE[w.r];
   return `${roleChip(w.r)} ${w.v !== null ? `<span class="tag">${VIBHAKTI[w.v]} ${VACANA[w.n]}</span>` : ''}
-    <p class="small">${R.n}${w.x ? ` ${esc(w.x)}` : ''}</p><div class="chips">${chips([R.s, R.vs].filter(Boolean))}</div>`;
+    <p class="small">${glossify(`${R.n}${w.x ? ` ${esc(w.x)}` : ''}`)}</p><div class="chips">${chips([R.s, R.vs].filter(Boolean))}</div>`;
 }
 
 // ============================================================================================

@@ -136,8 +136,30 @@ try {
   if (none.sandhi.changed.length || none.tin.changed.length) bad('lab: no sūtra off, yet forms changed');
   const pr = runLab(new Set(['6.1.97']));
   if (!pr.tin.changed.some((x) => x.form === 'भवन्ति' && x.after === 'भवान्ति')) bad('lab: अतो गुणे off should give भवान्ति');
-  const { rewriteSig } = await import('../js/ui.js');
+  const { rewriteSig, glossify } = await import('../js/ui.js');
   if (!rewriteSig(SUTRAS['6.1.77'])) bad('rewriteSig(6.1.77) is empty');
+
+  // ---- glossary: references resolve, each link form has one owner, and the linker respects word bounds ----
+  const { GLOSSARY, CATS } = await import('../js/content/glossary.js');
+  const owner = new Map();
+  for (const e of Object.values(GLOSSARY)) {
+    if (!CATS[e.c]) bad(`glossary ${e.id}: unknown category ${e.c}`);
+    if (!e.d || !e.en) bad(`glossary ${e.id}: definition or gloss missing`);
+    for (const s of e.s) if (!SUTRAS[s]) bad(`glossary ${e.id}: unknown sūtra ${s}`);
+    for (const x of e.see) if (!GLOSSARY[x]) bad(`glossary ${e.id}: unknown related term ${x}`);
+    for (const l of e.l) if (!LESSONS.some((y) => y.id === l)) bad(`glossary ${e.id}: unknown lesson ${l}`);
+    for (const f of e.k) { if (owner.has(f)) bad(`glossary: "${f}" belongs to ${owner.get(f)} and ${e.id}`); owner.set(f, e.id); }
+  }
+  const linked = (html) => [...glossify(html).matchAll(/data-gl="([^"]+)">([^<]+)</g)].map((m) => `${m[2]}=${m[1]}`).join(' ');
+  const glCases = [
+    ['<p>स्थान र आभ्यन्तर प्रयत्न; प्रयत्नको</p>', 'स्थान=sthana आभ्यन्तर प्रयत्न=abhyantara प्रयत्न=prayatna'],
+    ['<p>स्थानी अच्छा गणना पदार्थ व्याकरण</p>', 'स्थानी=sthani'],
+    ['<p>गुण गुण <span class="skt">वृद्धि</span> <a href="#">सन्धि</a></p>', 'गुण=guna'],
+    ['<p>लिङ्ग, लिङ्, गणको, पदमा</p>', 'लिङ्ग=linga लिङ्=lk-lin गण=gana पद=pada'],
+  ];
+  for (const [html, want] of glCases) if (linked(html) !== want) bad(`glossify ${html}: got "${linked(html)}", want "${want}"`);
+  // Linking must only wrap text, never alter it (lesson HTML has its own tags and links).
+  for (const l of LESSONS) for (const b of l.blocks) if (b.h && glossify(b.h).replace(/<a class="gl"[^>]*>([^<]*)<\/a>/g, '$1') !== b.h) bad(`glossify changed text in lesson ${l.id}`);
 } catch (e) {
   if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
   console.log('(content modules not present yet — skipped)');

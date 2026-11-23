@@ -7,6 +7,7 @@ import { sutraNum } from './varna.js';
 import { SUTRAS, TYPES, ROLES } from './content/sutras.js';
 import { VIBHAKTI, VACANA, PURUSHA, LAKARA } from './content/rupa.js';
 import { PADA } from './tinanta.js';
+import { GLOSSARY } from './content/glossary.js';
 
 /** Grammar labels shared by the verse reader and the quizzes. */
 export const supLabel = (v, n) => `${VIBHAKTI[v]} ${VACANA[n]}`;
@@ -16,6 +17,49 @@ export const tinLabel = (w) => `${lakName(w.lk)}, ${PURUSHA[w.p]} ${VACANA[w.n]}
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let uid = 0;
 export const nextId = (p) => `${p}${++uid}`;
+
+// ---- glossary links ---------------------------------------------------------------------------
+// A term links only at a word start, and only when it ends the word or is followed by a Nepali postposition.
+// That keeps स्थान out of स्थानी, अच् out of अच्छा and गण out of गणना. Longest form wins (आभ्यन्तर प्रयत्न before प्रयत्न).
+const GL_FORMS = Object.values(GLOSSARY).flatMap((e) => e.k.map((f) => [f, e.id])).sort((a, b) => b[0].length - a[0].length);
+const GL_ID = new Map(GL_FORMS);
+const GL_POST = 'हरू|को|का|की|कै|मा|ले|लाई|बाट|देखि|सम्म|भन्दा|सँग|तिर|द्वारा|नै|पछि|अघि|जस्तै|वाला';
+const GL_RE = new RegExp(`(?<![\\p{L}\\p{M}])(${GL_FORMS.map(([f]) => f).join('|')})(?=$|[^\\p{L}\\p{M}]|${GL_POST})`, 'gu');
+const GL_SKIP_TAG = new Set(['a', 'button', 'select', 'option', 'textarea', 'code', 'h1', 'h2', 'h3', 'h4', 'dt']);
+const GL_SKIP_CLASS = /\bclass="(?:[^"]*\s)?(?:skt|sref|chip|stext)(?:\s[^"]*)?"/;
+const GL_VOID = new Set(['br', 'hr', 'img', 'input', 'wbr', 'meta', 'link']);
+
+export const glossLink = (id, text = GLOSSARY[id]?.t) => GLOSSARY[id]
+  ? `<a class="gl" href="#/glossary/${id}" data-gl="${id}">${text}</a>` : (text ?? '');
+
+/**
+ * Links the first use of each glossary term in an HTML fragment. Text inside links, buttons, headings, code and
+ * Sanskrit-text elements (.skt) is left alone. `skip` = an entry id never to link (the entry being shown).
+ */
+export function glossify(html, skip) {
+  if (!html) return html ?? '';
+  const done = new Set(skip ? [skip] : []);
+  const stack = [];
+  let depth = 0;
+  return String(html).split(/(<[^>]*>)/).map((part) => {
+    if (part[0] === '<') {
+      const m = part.match(/^<(\/?)([a-zA-Z][\w-]*)([^>]*)>$/);
+      if (!m) return part;
+      const [, close, tag, attrs] = m, t = tag.toLowerCase();
+      if (GL_VOID.has(t) || attrs.endsWith('/')) return part;
+      if (close) { if (stack.pop()) depth--; }
+      else { const sk = GL_SKIP_TAG.has(t) || GL_SKIP_CLASS.test(attrs); stack.push(sk); if (sk) depth++; }
+      return part;
+    }
+    if (depth || !part) return part;
+    return part.replace(GL_RE, (f) => {
+      const id = GL_ID.get(f);
+      if (done.has(id)) return f;
+      done.add(id);
+      return glossLink(id, f);
+    });
+  }).join('');
+}
 
 export const sutraChip = (id, cls = '') => SUTRAS[id]
   ? `<button class="sref ${cls}" data-sutra="${id}"><span class="skt">${SUTRAS[id].t}</span> <small>${sutraNum(id)}</small></button>` : '';
@@ -46,8 +90,7 @@ export function sutraCard(id, { full = false } = {}) {
     ${pc}
     ${sig ? `<div class="sig" title="${esc(T.code.sigHint)}"><span>${T.code.sig}</span><code class="skt">${esc(sig)}</code></div>` : ''}
     ${s.av ? `<div class="av"><b>${T.anuvritti}:</b> ${s.av}</div>` : ''}
-    <p class="artha">${s.a}</p>
-    ${s.s ? `<p class="saral">${s.s}</p>` : ''}
+    ${glossify(`<p class="artha">${s.a}</p>${s.s ? `<p class="saral">${s.s}</p>` : ''}`)}
   </article>`;
 }
 
