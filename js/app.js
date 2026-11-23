@@ -12,7 +12,8 @@ import { store, requestPersistence } from './store.js';
 import { DHATUS, GANAS, dhatuById, LAKARAS, PADA, ENDINGS, JOIN, JOIN_ORDER, joinClass, endingVarga, vargaName, ANGA_VARGA, angaVarga, buildAnga, derive, padasOf, tinSweep } from './tinanta.js';
 import { sandhiSweep } from './sweep.js';
 import { parse } from './varna.js';
-import { esc, sutraChip, sutraCard, sandhiCard, revealSandhi, table, stepsHtml, header } from './ui.js';
+import { esc, sutraChip, sutraCard, sandhiCard, revealSandhi, table, stepsHtml, header, glossify, glossLink } from './ui.js';
+import { termHtml, glossaryView } from './gloss.js';
 import { READER_WIDGETS, onReaderClick, mapView, versesView, verseView, labView, isSwitchable, kritHtml, kritHintsHtml, anubandhaHtml, anubandhaTableHtml, verseOfDay } from './reader.js';
 
 const view = document.getElementById('view');
@@ -89,11 +90,11 @@ function onVarna(btn) {
   const l = btn.dataset.l, d = describe(l);
   const sav = [...VOWELS, ...VARGAS.flat(), ...ANTAHSTHA, ...USHMA].filter((x) => x !== l && savarna(l, x));
   root.querySelector('.vg-out').innerHTML = `<b class="skt big">${l}</b>
-    <dl><dt>स्थान</dt><dd>${d.sthana.join(' + ') || '—'}</dd>
-    <dt>आभ्यन्तर प्रयत्न</dt><dd>${d.abhyantara || '—'}</dd>
-    ${d.ghosha ? `<dt>बाह्य प्रयत्न</dt><dd>${d.ghosha}, ${d.prana}</dd>` : ''}
-    ${d.matra ? `<dt>मात्रा</dt><dd>${d.matra}</dd>` : ''}
-    <dt>सवर्ण</dt><dd class="skt">${sav.join(' ') || '—'}</dd></dl>`;
+    <dl><dt>${glossLink('sthana')}</dt><dd>${d.sthana.join(' + ') || '—'}</dd>
+    <dt>${glossLink('abhyantara')}</dt><dd>${d.abhyantara || '—'}</dd>
+    ${d.ghosha ? `<dt>${glossLink('bahya')}</dt><dd>${d.ghosha}, ${d.prana}</dd>` : ''}
+    ${d.matra ? `<dt>${T.matra}</dt><dd>${d.matra}</dd>` : ''}
+    <dt>${glossLink('savarna')}</dt><dd class="skt">${sav.join(' ') || '—'}</dd></dl>`;
   root.querySelector('.vg-out').classList.remove('muted');
 }
 
@@ -243,14 +244,14 @@ const WIDGETS = {
 
 function renderBlock(b) {
   switch (b.t) {
-    case 'p': return `<p>${b.h}</p>`;
+    case 'p': return `<p>${glossify(b.h)}</p>`;
     case 'h': return `<h3>${b.text}</h3>`;
-    case 'tip': return `<div class="callout tip">${b.h}</div>`;
-    case 'note': return `<div class="callout note">${b.h}</div>`;
+    case 'tip': return `<div class="callout tip">${glossify(b.h)}</div>`;
+    case 'note': return `<div class="callout note">${glossify(b.h)}</div>`;
     case 'verse': return `<blockquote class="verse skt">${b.text.replace(/\n/g, '<br>')}</blockquote>`;
     case 'sutra': return sutraCard(b.id);
     case 'sandhi': return sandhiCard(b.w1, b.w2, b.opts);
-    case 'table': return table(b.head, b.rows.map((r) => r.map((c) => `<span class="skt-ish">${c}</span>`)));
+    case 'table': return glossify(table(b.head, b.rows.map((r) => r.map((c) => `<span class="skt-ish">${c}</span>`))));
     case 'widget': return WIDGETS[b.name](b.args);
     case 'prakriya': return prakriyaHtml(b.id);
     case 'shabda': return shabdaHtml(b.id);
@@ -299,16 +300,32 @@ function openSutra(id) {
     + (isSwitchable(id) ? `<p><a href="#/lab/${id}" data-act="close-sheet">🧪 ${T.lab.open}</a></p>` : '')
     + (exs.length ? `<h4>${T.examples}</h4>${exs.map(([a, b, , o]) => sandhiCard(a, b, o || {}, { open: true })).join('')}` : '')
     + sweepHtml(id);
-  showSheet(T.sheet.sutra);
+  showSheet(T.sheet.sutra, () => openSutra(id));
+}
+
+/** Glossary entry in the sheet; a term opened from inside the sheet can go back (see showSheet). */
+function openTerm(id) {
+  const html = termHtml(id);
+  if (!html) return;
+  sheet.querySelector('.sheet-body').innerHTML = html;
+  showSheet(T.gloss.sheet, () => openTerm(id));
 }
 
 /** Opens over the current page, so a lesson or quiz keeps its place. */
 function openMaheshvara() {
   sheet.querySelector('.sheet-body').innerHTML = `<h2>${T.sheet.mh}</h2>` + maheshvaraRefHtml();
-  showSheet(T.sheet.mh);
+  showSheet(T.sheet.mh, openMaheshvara);
 }
 
-function showSheet(label) {
+// Opening something from inside the open sheet stacks it, so ← पछाडि returns to the previous term or sūtra.
+let sheetHist = [];
+// Built here, not in index.html, so a stale cached index.html cannot break startup.
+const sheetBack = Object.assign(document.createElement('button'), { className: 'sheet-back', hidden: true });
+sheet.querySelector('.sheet-head').prepend(sheetBack);
+function showSheet(label, reopen) {
+  if (!sheet.open) sheetHist = [];
+  sheetHist.push(reopen);
+  sheetBack.hidden = sheetHist.length < 2;
   sheet.setAttribute('aria-label', label);
   if (!sheet.open) sheet.showModal();
   sheet.querySelector('.sheet-body').scrollTop = 0;
@@ -343,7 +360,7 @@ function runQuiz(el, make, { onDone } = {}) {
       store.recordAnswer(q.topic, ok);
       el.querySelectorAll('.opt').forEach((b, j) => { b.disabled = true; b.classList.toggle('right', j === q.answer); b.classList.toggle('wrongpick', j === k && !ok); });
       const ex = el.querySelector('.qexp');
-      ex.innerHTML = `<b class="${ok ? 'ok' : 'bad'}">${ok ? T.correct : T.wrong}</b> ${q.explain || ''}
+      ex.innerHTML = `<b class="${ok ? 'ok' : 'bad'}">${ok ? T.correct : T.wrong}</b> ${glossify(q.explain)}
         <div class="row end"><button class="btn" data-q="next">${i + 1 < qs.length ? T.next : T.finish}</button></div>`;
       ex.hidden = false;
       ex.querySelector('[data-q="next"]').focus({ preventScroll: true });
@@ -493,7 +510,7 @@ function reviewView() {
   draw();
 }
 
-const TOOL_HREF = { map: '#/map', lab: '#/lab', verses: '#/verses' };
+const TOOL_HREF = { map: '#/map', lab: '#/lab', verses: '#/verses', glossary: '#/glossary' };
 function toolsView() {
   view.innerHTML = header(T.toolsTitle) + `<div class="grid2">${Object.entries(T.tools).map(([k, [t, s]]) =>
     `<a class="card link" href="${TOOL_HREF[k] || `#/tools/${k}`}"><b>${t}</b><p class="muted small">${s}</p></a>`).join('')}</div>`;
@@ -630,6 +647,7 @@ const ROUTES = [
   [/^#\/lab(?:\/([\w.]+))?$/, (id) => labView(id), 'tools'],
   [/^#\/tools\/krit$/, kritToolView, 'tools'],
   [/^#\/tools\/anubandha$/, anubandhaToolView, 'tools'],
+  [/^#\/glossary(?:\/([\w-]+))?$/, (id) => glossaryView(id), 'tools'],
 ];
 
 function route() {
@@ -657,6 +675,8 @@ function toast(msg, action) {
 
 let resetArmed = false;
 document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-gl]');
+  if (g && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openTerm(g.dataset.gl); return; }
   const s = e.target.closest('[data-sutra]');
   if (s && !e.target.closest('a')) { openSutra(s.dataset.sutra); return; }
   const a = e.target.closest('[data-act]');
@@ -705,6 +725,8 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('article.sutra[data-sutra]')) { e.preventDefault(); openSutra(e.target.dataset.sutra); }
 });
 sheet.querySelector('.sheet-close').onclick = () => sheet.close();
+sheetBack.textContent = T.sheet.back;
+sheetBack.onclick = () => { sheetHist.pop(); sheetHist.pop()?.(); };
 
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if ((location.hash || '#/') === '#/') homeView(); });

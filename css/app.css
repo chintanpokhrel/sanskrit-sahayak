@@ -431,3 +431,19 @@ table.krit thead { display: none; }
   .tbl-wrap { overflow: visible; }
 }
 .verse-foot { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 16px; }
+
+/* glossary: linked terms, sheet back button, glossary page */
+a.gl { color: inherit; text-decoration: underline dotted var(--accent-2); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; }
+a.gl:hover, a.gl:focus-visible { color: var(--accent); }
+.sheet-back { position: absolute; left: 6px; top: 4px; appearance: none; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; min-height: 44px; padding: 0 10px; }
+.gl-entry h2 { margin: 0; }
+.gl-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.gl-row .chips { margin: 4px 0; gap: 6px; }
+.gl-sec h3 { margin: 18px 0 8px; }
+.gl-item { scroll-margin-top: 80px; }
+.gl-item p { margin: 6px 0; }
+.gl-item.focus { outline: 2px solid var(--accent-2); }
+.gl-cats { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+.gl-cats .chip { white-space: nowrap; }
+@media print { a.gl { text-decoration: none; } .gl-cats, #glq { display: none; } }
+.sheet-head { min-height: 48px; flex-shrink: 0; }

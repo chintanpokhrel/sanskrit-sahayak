@@ -16,6 +16,7 @@ that names the sūtra applied at each step.
 | श्लोक | `#/verses` — 8 well-known verses (स्तुति, गीता, उपनिषद्, हितोपदेश). Each has engine-checked पदच्छेद, a full analysis of every pada (prakṛti, form, kṛt, samāsa, role, sūtras), a guess-first mode, an अन्वय coloured by kāraka role, and the meaning |
 | कारक, समास, कृदन्त | Interactive widgets: pick the role of each word in a sentence; pick the samāsa type and see the vigraha; kṛdanta table by dhātu or by suffix (22 dhātus × 8 kṛt) |
 | अनुबन्ध | Decoder: pick a suffix, see its इत् letters as flags and what each one does (`js/content/anubandha.js`) |
+| शब्दावली | `#/glossary`: 185 technical terms (`js/content/glossary.js`), from प्रयत्न and स्थान to अधिकार, असिद्ध, अङ्ग, कारक and the ग्रन्थ names. Each has a Nepali definition, an English gloss, sūtras, related terms and the lessons that teach it. The first use of a term in lesson text, sūtra explanations, verse notes, map notes and quiz explanations is linked (dotted underline) and opens the entry in the sheet; ← पछाडि goes back. Lakāra, kāraka, samāsa-type, kṛt and pratyāhāra entries are built from the files that define them |
 | सूत्र (262) | Text, type, colour-coded पदच्छेद (षष्ठी = स्थानी, प्रथमा = आदेश, सप्तमी/पञ्चमी = निमित्त), a rewrite signature built from it (`इकः → यण् / __ अचि`), अनुवृत्ति, अर्थ, सरल व्याख्या. Each sheet also shows its अधिकार, its neighbours in Aṣṭādhyāyī order, and **सबै प्रयोग** (every junction/form where the engines apply it) |
 | सन्धि इन्जिन | `js/sandhi.js` — अच्, common हल् (stop/म्/न् finals), विसर्ग. Every step cites its sūtra; optional (वा) rules return the alternative form |
 | तिङन्त इन्जिन | `js/tinanta.js` + `js/content/dhatu.js` — first gaṇa group (भ्वादि, दिवादि, तुदादि, चुरादि), कर्तृवाच्य, लट् लोट् लङ् विधिलिङ्, both padas, 57 dhātus. Every step cites its sūtra |
@@ -81,6 +82,10 @@ Add a case there before changing a rule.
   that they agree with the engines and that every cited sūtra exists, not that the grammar is right. Sūtras
   flagged as uncertain when they were written: 3.2.124 (artha covers only the sūtra's own condition), 6.4.110
   (no anuvṛtti given), 8.1.22 / 8.1.23 (anuvṛtti from memory), 1.1.53, 1.1.56, 6.4.51 (examples).
+- **Glossary.** The definitions are AI-written and need the same review as the rest. Linking is automatic: a term
+  links at a word start when it ends the word or is followed by a Nepali postposition (को, मा, ले …). Words that are
+  too common in plain Nepali (सूत्र, नियम, शेष, bare पुरुष) are not auto-linked. A few compounds still link their
+  first part (अङ्गकार्य → अङ्ग), which is harmless. Tests check every reference and the word-boundary cases.
 - **Kṛdanta is a table, not an engine.** Ārdhadhātuka suffixes need इट् (सेट्/अनिट्/वेट्) and many root-specific
   rules. The next engine step is ārdhadhātuka (इट् first), which would also unlock लिट्/लुट्/लृट्.
 - **Rule lab scope.** Only the sūtras in `SANDHI_SWITCHABLE` / `TIN_SWITCHABLE` can be switched off. Switching
